@@ -11,7 +11,12 @@
 // WEEKLY_CURRICULUM below. Nothing else needs to change — the Week dropdown,
 // auto-detection, and generation all read from this list.
 
-const SEMESTER_START = "2026-08-20";
+// Anchor for the date-driven default week (getCurrentWeekNumber below) —
+// not necessarily the literal first day of class, just tuned so the
+// auto-selected week flips on whatever day the material's actually ready.
+// Adjust this whenever a new week's release date needs to move; each week
+// still stays manually pickable from the dropdown regardless of this date.
+const SEMESTER_START = "2026-08-18";
 
 function pickInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
