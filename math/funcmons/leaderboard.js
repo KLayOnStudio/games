@@ -41,6 +41,17 @@ function computeRound2Score(seconds, mistakes) {
   return seconds * 10 + mistakes;
 }
 
+function generateDeviceToken() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// In-memory fallback for when localStorage is unavailable (private
+// browsing, blocked storage, etc.) — without this, every getDeviceToken()
+// call in that situation would mint a NEW random token, so playing twice
+// in the same session would look like two different devices and the
+// second claim would be wrongly rejected as already-in-use.
+let inMemoryDeviceToken = null;
+
 // An invisible per-browser token, not a password — lets the server tell a
 // returning student on the same device apart from a different device
 // trying to reuse their Student ID. See backend/main.py's /claim-id.
@@ -48,13 +59,14 @@ function getDeviceToken() {
   try {
     let token = localStorage.getItem(DEVICE_TOKEN_KEY);
     if (!token) {
-      token = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      token = generateDeviceToken();
       localStorage.setItem(DEVICE_TOKEN_KEY, token);
     }
     return token;
   } catch (err) {
     console.warn("Could not access localStorage for device token", err);
-    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (!inMemoryDeviceToken) inMemoryDeviceToken = generateDeviceToken();
+    return inMemoryDeviceToken;
   }
 }
 

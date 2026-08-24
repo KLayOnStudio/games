@@ -128,6 +128,15 @@ function saveSetupCache() {
 }
 
 const cachedSetup = loadSetupCache();
+
+// Tracks the last Student ID this device actually started a game with, so
+// a Start click with a DIFFERENT id can be flagged as a likely typo before
+// it silently creates a brand-new, disconnected leaderboard identity. Only
+// meaningful for non-guests, who type their own id (guests get one
+// auto-generated). Starts from whatever was cached at page load; updated
+// after each confirmed Start so it stays current within this session too.
+let lastConfirmedStudentId = cachedSetup.studentId || "";
+
 if (cachedSetup.isGuest) guestToggle.checked = true;
 if (SCHOOL_YEARS.includes(cachedSetup.schoolYear)) schoolYearSelect.value = cachedSetup.schoolYear;
 if (CAMPUSES.includes(cachedSetup.campus)) campusSelect.value = cachedSetup.campus;
@@ -252,6 +261,16 @@ startBtn.addEventListener("click", async () => {
   const studentId = studentIdInput.value.trim();
   const className = guestToggle.checked ? GUEST_CLASS : classSelect.value;
 
+  // Catch likely typos before they silently fragment a student's record: if
+  // this device has started a game as a different id before, make sure the
+  // change is intentional rather than a mistyped id nobody notices.
+  if (!guestToggle.checked && studentId && lastConfirmedStudentId && studentId !== lastConfirmedStudentId) {
+    const proceed = confirm(
+      `Last time you played as "${lastConfirmedStudentId}" on this device — start this game as "${studentId}" instead?`
+    );
+    if (!proceed) return;
+  }
+
   // Only bother claiming an ID if there's an ID to protect — guests/blank
   // IDs have nothing for another student to collide with.
   if (studentId) {
@@ -263,6 +282,8 @@ startBtn.addEventListener("click", async () => {
       return;
     }
   }
+
+  if (!guestToggle.checked && studentId) lastConfirmedStudentId = studentId;
 
   startGame({
     studentId,
