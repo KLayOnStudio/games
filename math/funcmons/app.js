@@ -206,6 +206,9 @@ let r2TimerInterval = null;
 function showScreen(screen) {
   [setupScreen, gameScreen, winScreen, round2Screen].forEach((s) => s.classList.add("hidden"));
   screen.classList.remove("hidden");
+  // Refresh the hint so a stale message from a prior Start attempt (e.g. an
+  // id-conflict note) doesn't linger once the student's back on this screen.
+  if (screen === setupScreen) updateStartButton();
 }
 
 // ---------- Setup screen ----------
@@ -271,15 +274,16 @@ startBtn.addEventListener("click", async () => {
     if (!proceed) return;
   }
 
-  // Only bother claiming an ID if there's an ID to protect — guests/blank
-  // IDs have nothing for another student to collide with.
+  // Still attempt the claim so a returning student's own device stays
+  // recognized as such, but a conflict (someone else already used this id)
+  // no longer blocks play — impersonation isn't a real concern here, only
+  // accidental typos are, and that's handled by the confirm above instead.
   if (studentId) {
     startBtn.disabled = true;
     const claim = await claimStudentId({ className, studentId });
     startBtn.disabled = false;
     if (!claim.ok) {
       startHint.textContent = claim.message;
-      return;
     }
   }
 
