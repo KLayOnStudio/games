@@ -957,11 +957,12 @@ function startRound2() {
 }
 
 // Battle Mode's Round 2 — reuses the same pairs as the Round 1 battle just
-// played (state.deck/state.sessionPairs, set by startBattle), same turn
-// rule as Round 1: a correct tap keeps your turn, a wrong one passes the
-// device. Most pairs solved when the queue clears wins. Still timed (the
-// user's explicit call, unlike Round 1 Battle which has no clock) — the
-// timer is purely informational here since nothing is scored/recorded.
+// played (state.deck/state.sessionPairs, set by startBattle). Unlike
+// Round 1's "correct keeps your turn" rule, Round 2 always alternates
+// turns every equation regardless of right/wrong. Most pairs solved when
+// the queue clears wins. Still timed (the user's explicit call, unlike
+// Round 1 Battle which has no clock) — the timer is purely informational
+// here since nothing is scored/recorded.
 function startBattleRound2() {
   const usedPairIds = [...new Set(state.deck.map((c) => c.pairId))];
   const pairs = usedPairIds.map((id) => state.sessionPairs.find((p) => p.id === id));
@@ -1110,10 +1111,12 @@ function onR2SideClick(sideEl) {
       throwOnError: false,
     });
     r2Equals.classList.add("correct");
-    // Battle Mode: a correct tap keeps the same player's turn, same rule
-    // as Round 1's card matching.
+    // Battle Mode: unlike Round 1's card matching, Round 2 always
+    // alternates turns every equation regardless of right/wrong — a
+    // correct tap still scores, it just doesn't keep the turn.
     if (r2State.mode === "battle") {
       r2State.players[r2State.currentPlayerIndex].solved += 1;
+      r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
       updateBattleR2Hud();
     } else {
       r2State.solved += 1;
@@ -1130,7 +1133,6 @@ function onR2SideClick(sideEl) {
     r2Equals.classList.add("incorrect");
     r2State.mistakes += 1;
     r2State.queue.push(pair);
-    // Battle Mode: a wrong tap passes the device to the other player.
     if (r2State.mode === "battle") {
       r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
       updateBattleR2Hud();
