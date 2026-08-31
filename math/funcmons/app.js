@@ -966,12 +966,12 @@ function startRound2() {
 // solved (see onR2SideClick/handleR2Timeout).
 //
 // Each player has their OWN time limit (not a shared/combined schedule):
-// starts at 10 seconds and drops by 1 every time THAT player answers
-// correctly (wrong taps and timeouts don't shrink it), floored at 4
-// seconds. Tracked directly as player.timeLimit, mutated in
-// onR2SideClick's correct branch.
+// starts at 10 seconds and drops by 1 every OTHER correct answer THAT
+// player gets (wrong taps, timeouts, and every odd-numbered correct don't
+// shrink it), floored at 3 seconds. Tracked directly as player.timeLimit,
+// mutated in onR2SideClick's correct branch based on player.correctCount.
 const BATTLE_TURN_TIME_LIMIT_START = 10;
-const BATTLE_TURN_TIME_LIMIT_FLOOR = 4;
+const BATTLE_TURN_TIME_LIMIT_FLOOR = 3;
 
 function startBattleRound2() {
   const usedPairIds = [...new Set(state.deck.map((c) => c.pairId))];
@@ -992,6 +992,7 @@ function startBattleRound2() {
       color: p.color,
       points: 0,
       timeLimit: BATTLE_TURN_TIME_LIMIT_START,
+      correctCount: 0, // drives the every-other-correct-answer time decrease below
     })),
     currentPlayerIndex: 0,
   };
@@ -1164,7 +1165,10 @@ function onR2SideClick(sideEl) {
     if (r2State.mode === "battle") {
       const answeringPlayer = r2State.players[r2State.currentPlayerIndex];
       answeringPlayer.points += 1;
-      answeringPlayer.timeLimit = Math.max(BATTLE_TURN_TIME_LIMIT_FLOOR, answeringPlayer.timeLimit - 1);
+      answeringPlayer.correctCount += 1;
+      if (answeringPlayer.correctCount % 2 === 0) {
+        answeringPlayer.timeLimit = Math.max(BATTLE_TURN_TIME_LIMIT_FLOOR, answeringPlayer.timeLimit - 1);
+      }
       r2State.cleared += 1;
       showR2Feedback(`${answeringPlayer.name}: +1`, "correct");
       r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
