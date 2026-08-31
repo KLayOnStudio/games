@@ -973,6 +973,7 @@ function startBattleRound2() {
     total: pairs.length,
     mistakes: 0,
     seconds: 0,
+    turnSeconds: 0,
     current: null,
     locked: false,
     players: state.players.map((p) => ({ name: p.name, color: p.color, solved: 0 })),
@@ -995,8 +996,18 @@ battleRound2Btn.addEventListener("click", startBattleRound2);
 function startR2Timer() {
   stopR2Timer();
   r2TimerInterval = setInterval(() => {
+    // r2State.seconds keeps accumulating for the whole round regardless of
+    // mode (solo's scoring formula needs the round total, and Battle's
+    // end-of-round summary reports it too) — but Battle Mode's HUD shows
+    // turnSeconds instead, which renderNextR2Item resets to 0 on every new
+    // turn, since the display there is meant to be per-turn, not per-round.
     r2State.seconds += 1;
-    r2HudTime.textContent = formatTime(r2State.seconds);
+    if (r2State.mode === "battle") {
+      r2State.turnSeconds += 1;
+      r2HudTime.textContent = formatTime(r2State.turnSeconds);
+    } else {
+      r2HudTime.textContent = formatTime(r2State.seconds);
+    }
   }, 1000);
 }
 
@@ -1073,6 +1084,14 @@ async function renderNextR2Item() {
 
   r2State.current = { pair, functionSide: functionOnLeft ? "left" : "right" };
   r2State.locked = false;
+
+  // Battle Mode's timer is per-turn, not per-round — reset it the moment a
+  // new turn's equation is shown, regardless of how the previous turn
+  // ended (correct or incorrect both pass the turn under always-alternate).
+  if (r2State.mode === "battle") {
+    r2State.turnSeconds = 0;
+    r2HudTime.textContent = "0:00";
+  }
 
   r2InstructionsNotation.innerHTML = katex.renderToString(diffNotation(pair.variable), {
     throwOnError: false,
