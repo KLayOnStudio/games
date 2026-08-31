@@ -424,6 +424,7 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
   };
 
   gameHeaderEl.classList.remove("battle-mode");
+  gameScreen.classList.remove("battle-turn-1", "battle-turn-2");
   hudPlayer.textContent = studentId || "Guest";
   hudMoves.textContent = "0";
   hudTime.textContent = "0:00";
@@ -477,6 +478,11 @@ function updateBattleHud() {
   hudP1Matches.textContent = String(state.players[0].matches);
   hudP2Matches.textContent = String(state.players[1].matches);
   hudTurn.textContent = state.players[state.currentPlayerIndex].name;
+
+  const isPlayer1Turn = state.currentPlayerIndex === 0;
+  gameScreen.classList.toggle("battle-turn-1", isPlayer1Turn);
+  gameScreen.classList.toggle("battle-turn-2", !isPlayer1Turn);
+  hudTurn.style.color = isPlayer1Turn ? "var(--player1-color)" : "var(--player2-color)";
 }
 
 function finishBattle() {

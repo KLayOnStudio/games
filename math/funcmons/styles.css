@@ -27,6 +27,12 @@
   --pair-color-7: #4a3aa7; /* violet */
   --pair-color-8: #e34948; /* red */
 
+  /* Battle Mode player identity — reuses two colors from the pair palette
+     above (already validated for this light surface) rather than
+     introducing a new pairing. */
+  --player1-color: var(--pair-color-1); /* blue */
+  --player2-color: var(--pair-color-8); /* red */
+
   font-family: var(--font-body);
 }
 
@@ -230,6 +236,19 @@ label, .field-label {
   flex-direction: column;
   min-height: calc(100vh - 64px);
   min-height: calc(100dvh - 64px);
+  background-color: var(--bg);
+  transition: background-color 0.3s ease;
+}
+
+/* Battle Mode tints the whole screen toward whichever player's turn it is
+   — a background-level cue that's hard to miss when passing the device
+   back and forth, on top of the HUD's Turn label. */
+#game-screen.battle-turn-1 {
+  background-color: color-mix(in srgb, var(--player1-color) 12%, var(--bg));
+}
+
+#game-screen.battle-turn-2 {
+  background-color: color-mix(in srgb, var(--player2-color) 12%, var(--bg));
 }
 
 .game-header {
@@ -281,6 +300,19 @@ label, .field-label {
 
 .game-header.battle-mode .battle-only {
   display: flex;
+}
+
+/* Each player keeps their color on their own HUD slot regardless of whose
+   turn it is — a fixed identity, separate from the turn-based background
+   tint above. */
+#hud-p1-label,
+#hud-p1-matches {
+  color: var(--player1-color);
+}
+
+#hud-p2-label,
+#hud-p2-matches {
+  color: var(--player2-color);
 }
 
 .card-grid {
