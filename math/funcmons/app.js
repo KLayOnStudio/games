@@ -962,17 +962,16 @@ function startRound2() {
 // Round 1's "correct keeps your turn" rule, Round 2 always alternates
 // turns every equation regardless of right/wrong — including a timeout,
 // which counts as a miss (pair recycled to the back of the queue, turn
-// passes) exactly like a wrong tap. Most pairs solved when the queue
-// clears wins. Each turn has a shrinking time limit — 5 seconds for the
-// first two turns, then one second less each turn after that down to a
-// 1-second floor — via getBattleTurnTimeLimit below.
-const BATTLE_TURN_TIME_LIMIT_START = 5;
-const BATTLE_TURN_TIME_LIMIT_FLOOR = 1;
-
-function getBattleTurnTimeLimit(turnNumber) {
-  const decreaseFrom = Math.max(0, turnNumber - 2);
-  return Math.max(BATTLE_TURN_TIME_LIMIT_FLOOR, BATTLE_TURN_TIME_LIMIT_START - decreaseFrom);
-}
+// passes) exactly like a wrong tap. Win condition is points, not pairs
+// solved (see onR2SideClick/handleR2Timeout).
+//
+// Each player has their OWN time limit (not a shared/combined schedule):
+// starts at 10 seconds and drops by 1 every time THAT player answers
+// correctly (wrong taps and timeouts don't shrink it), floored at 4
+// seconds. Tracked directly as player.timeLimit, mutated in
+// onR2SideClick's correct branch.
+const BATTLE_TURN_TIME_LIMIT_START = 10;
+const BATTLE_TURN_TIME_LIMIT_FLOOR = 4;
 
 function startBattleRound2() {
   const usedPairIds = [...new Set(state.deck.map((c) => c.pairId))];
@@ -985,11 +984,15 @@ function startBattleRound2() {
     cleared: 0, // pairs answered correctly at least once — drives the progress bar, separate from points
     mistakes: 0,
     seconds: 0,
-    turnNumber: 0,
     turnRemaining: 0,
     current: null,
     locked: false,
-    players: state.players.map((p) => ({ name: p.name, color: p.color, points: 0 })),
+    players: state.players.map((p) => ({
+      name: p.name,
+      color: p.color,
+      points: 0,
+      timeLimit: BATTLE_TURN_TIME_LIMIT_START,
+    })),
     currentPlayerIndex: 0,
   };
 
@@ -1109,13 +1112,10 @@ async function renderNextR2Item() {
   r2State.current = { pair, functionSide: functionOnLeft ? "left" : "right" };
   r2State.locked = false;
 
-  // Battle Mode: start this turn's countdown fresh — the time limit
-  // shrinks as the round goes on (getBattleTurnTimeLimit), regardless of
-  // how the previous turn ended (correct, wrong, or timed out all pass
-  // the turn under always-alternate).
+  // Battle Mode: start this turn's countdown fresh, using whichever
+  // player is up next's own current time limit.
   if (r2State.mode === "battle") {
-    r2State.turnNumber += 1;
-    r2State.turnRemaining = getBattleTurnTimeLimit(r2State.turnNumber);
+    r2State.turnRemaining = r2State.players[r2State.currentPlayerIndex].timeLimit;
     r2HudTime.textContent = formatTime(r2State.turnRemaining);
     clearR2Feedback();
   }
@@ -1164,6 +1164,7 @@ function onR2SideClick(sideEl) {
     if (r2State.mode === "battle") {
       const answeringPlayer = r2State.players[r2State.currentPlayerIndex];
       answeringPlayer.points += 1;
+      answeringPlayer.timeLimit = Math.max(BATTLE_TURN_TIME_LIMIT_FLOOR, answeringPlayer.timeLimit - 1);
       r2State.cleared += 1;
       showR2Feedback(`${answeringPlayer.name}: +1`, "correct");
       r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
