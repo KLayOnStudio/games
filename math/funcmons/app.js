@@ -959,10 +959,20 @@ function startRound2() {
 // Battle Mode's Round 2 — reuses the same pairs as the Round 1 battle just
 // played (state.deck/state.sessionPairs, set by startBattle). Unlike
 // Round 1's "correct keeps your turn" rule, Round 2 always alternates
-// turns every equation regardless of right/wrong. Most pairs solved when
-// the queue clears wins. Still timed (the user's explicit call, unlike
-// Round 1 Battle which has no clock) — the timer is purely informational
-// here since nothing is scored/recorded.
+// turns every equation regardless of right/wrong — including a timeout,
+// which counts as a miss (pair recycled to the back of the queue, turn
+// passes) exactly like a wrong tap. Most pairs solved when the queue
+// clears wins. Each turn has a shrinking time limit — 5 seconds for the
+// first two turns, then one second less each turn after that down to a
+// 1-second floor — via getBattleTurnTimeLimit below.
+const BATTLE_TURN_TIME_LIMIT_START = 5;
+const BATTLE_TURN_TIME_LIMIT_FLOOR = 1;
+
+function getBattleTurnTimeLimit(turnNumber) {
+  const decreaseFrom = Math.max(0, turnNumber - 2);
+  return Math.max(BATTLE_TURN_TIME_LIMIT_FLOOR, BATTLE_TURN_TIME_LIMIT_START - decreaseFrom);
+}
+
 function startBattleRound2() {
   const usedPairIds = [...new Set(state.deck.map((c) => c.pairId))];
   const pairs = usedPairIds.map((id) => state.sessionPairs.find((p) => p.id === id));
@@ -973,7 +983,8 @@ function startBattleRound2() {
     total: pairs.length,
     mistakes: 0,
     seconds: 0,
-    turnSeconds: 0,
+    turnNumber: 0,
+    turnRemaining: 0,
     current: null,
     locked: false,
     players: state.players.map((p) => ({ name: p.name, color: p.color, solved: 0 })),
@@ -998,13 +1009,15 @@ function startR2Timer() {
   r2TimerInterval = setInterval(() => {
     // r2State.seconds keeps accumulating for the whole round regardless of
     // mode (solo's scoring formula needs the round total, and Battle's
-    // end-of-round summary reports it too) — but Battle Mode's HUD shows
-    // turnSeconds instead, which renderNextR2Item resets to 0 on every new
-    // turn, since the display there is meant to be per-turn, not per-round.
+    // end-of-round summary reports it too). Battle Mode's HUD shows a
+    // per-turn countdown instead (turnRemaining, reset by
+    // renderNextR2Item on every new turn) — running out costs the turn,
+    // same as a wrong tap.
     r2State.seconds += 1;
     if (r2State.mode === "battle") {
-      r2State.turnSeconds += 1;
-      r2HudTime.textContent = formatTime(r2State.turnSeconds);
+      r2State.turnRemaining -= 1;
+      r2HudTime.textContent = formatTime(Math.max(0, r2State.turnRemaining));
+      if (r2State.turnRemaining <= 0) handleR2Timeout();
     } else {
       r2HudTime.textContent = formatTime(r2State.seconds);
     }
@@ -1085,12 +1098,14 @@ async function renderNextR2Item() {
   r2State.current = { pair, functionSide: functionOnLeft ? "left" : "right" };
   r2State.locked = false;
 
-  // Battle Mode's timer is per-turn, not per-round — reset it the moment a
-  // new turn's equation is shown, regardless of how the previous turn
-  // ended (correct or incorrect both pass the turn under always-alternate).
+  // Battle Mode: start this turn's countdown fresh — the time limit
+  // shrinks as the round goes on (getBattleTurnTimeLimit), regardless of
+  // how the previous turn ended (correct, wrong, or timed out all pass
+  // the turn under always-alternate).
   if (r2State.mode === "battle") {
-    r2State.turnSeconds = 0;
-    r2HudTime.textContent = "0:00";
+    r2State.turnNumber += 1;
+    r2State.turnRemaining = getBattleTurnTimeLimit(r2State.turnNumber);
+    r2HudTime.textContent = formatTime(r2State.turnRemaining);
   }
 
   r2InstructionsNotation.innerHTML = katex.renderToString(diffNotation(pair.variable), {
@@ -1160,6 +1175,27 @@ function onR2SideClick(sideEl) {
     }
     setTimeout(renderNextR2Item, 900);
   }
+}
+
+// Battle Mode only: the current turn's countdown hit zero before either
+// side was tapped. Treated exactly like a wrong tap — pair recycled to
+// the back of the queue, turn passes — just with no specific side to
+// blame, so neither gets the "incorrect" styling, only the equals sign
+// and a vibration signal it.
+function handleR2Timeout() {
+  if (r2State.locked) return;
+  r2State.locked = true;
+  r2Sides.forEach((s) => (s.disabled = true));
+
+  const { pair } = r2State.current;
+  r2Equals.textContent = "≠";
+  r2Equals.classList.add("incorrect");
+  vibrate(200);
+  r2State.mistakes += 1;
+  r2State.queue.push(pair);
+  r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
+  updateBattleR2Hud();
+  setTimeout(renderNextR2Item, 900);
 }
 
 r2QuitBtn.addEventListener("click", () => {
