@@ -55,10 +55,16 @@
 
       <div id="battle-fields" class="hidden">
         <label for="battle-p1-name" class="field-label">Player 1 Name</label>
-        <input id="battle-p1-name" type="text" placeholder="Player 1" autocomplete="off" />
+        <div class="battle-player-row">
+          <input id="battle-p1-name" class="field-input" type="text" placeholder="Player 1" autocomplete="off" />
+          <input id="battle-p1-color" type="color" value="#765fac" aria-label="Player 1 color" />
+        </div>
 
         <label for="battle-p2-name" class="field-label">Player 2 Name</label>
-        <input id="battle-p2-name" type="text" placeholder="Player 2" autocomplete="off" />
+        <div class="battle-player-row">
+          <input id="battle-p2-name" class="field-input" type="text" placeholder="Player 2" autocomplete="off" />
+          <input id="battle-p2-color" type="color" value="#52b575" aria-label="Player 2 color" />
+        </div>
       </div>
     </div>
 

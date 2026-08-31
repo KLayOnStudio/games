@@ -27,11 +27,11 @@
   --pair-color-7: #4a3aa7; /* violet */
   --pair-color-8: #e34948; /* red */
 
-  /* Battle Mode player identity — reuses two colors from the pair palette
-     above (already validated for this light surface) rather than
-     introducing a new pairing. */
-  --player1-color: var(--pair-color-1); /* blue */
-  --player2-color: var(--pair-color-8); /* red */
+  /* Battle Mode player identity — defaults to the company logo colors.
+     Overridden per-battle via inline custom properties (app.js) if a
+     player picks a different color on the setup screen. */
+  --player1-color: #765fac; /* purple */
+  --player2-color: #52b575; /* green */
 
   font-family: var(--font-body);
 }
@@ -157,6 +157,27 @@ label, .field-label {
 #student-id:focus,
 .field-input:focus {
   border-color: var(--accent);
+}
+
+.battle-player-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.battle-player-row input[type="text"] {
+  flex: 1;
+}
+
+.battle-player-row input[type="color"] {
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .pill-group {

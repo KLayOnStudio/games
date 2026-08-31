@@ -24,6 +24,8 @@ const studentIdField = document.getElementById("student-id-field");
 const battleFields = document.getElementById("battle-fields");
 const battleP1NameInput = document.getElementById("battle-p1-name");
 const battleP2NameInput = document.getElementById("battle-p2-name");
+const battleP1ColorInput = document.getElementById("battle-p1-color");
+const battleP2ColorInput = document.getElementById("battle-p2-color");
 
 let selectedPairCount = null;
 
@@ -327,8 +329,8 @@ startBtn.addEventListener("click", async () => {
       weekNumber: Number(weekSelect.value),
       pairCount: selectedPairCount,
       players: [
-        battleP1NameInput.value.trim() || "Player 1",
-        battleP2NameInput.value.trim() || "Player 2",
+        { name: battleP1NameInput.value.trim() || "Player 1", color: battleP1ColorInput.value },
+        { name: battleP2NameInput.value.trim() || "Player 2", color: battleP2ColorInput.value },
       ],
     });
     return;
@@ -458,9 +460,17 @@ function startBattle({ className, weekNumber, pairCount, players }) {
     matchCount: 0,
     moves: 0,
     locked: false,
-    players: players.map((name) => ({ name, matches: 0 })),
+    players: players.map(({ name, color }) => ({ name, color, matches: 0 })),
     currentPlayerIndex: 0,
   };
+
+  // Colors are per-battle, applied as custom-property overrides on the
+  // root — every CSS rule that already reads var(--player1-color) /
+  // var(--player2-color) (HUD labels, the turn-tint background) just
+  // picks up whatever was chosen, defaulting to the company colors set
+  // as the pickers' HTML defaults if nobody changes them.
+  document.documentElement.style.setProperty("--player1-color", state.players[0].color);
+  document.documentElement.style.setProperty("--player2-color", state.players[1].color);
 
   gameHeaderEl.classList.add("battle-mode");
   updateBattleHud();
@@ -504,7 +514,7 @@ battleAgainBtn.addEventListener("click", () => {
     className: state.className,
     weekNumber: state.weekNumber,
     pairCount: state.pairCount,
-    players: state.players.map((p) => p.name),
+    players: state.players.map((p) => ({ name: p.name, color: p.color })),
   });
 });
 
