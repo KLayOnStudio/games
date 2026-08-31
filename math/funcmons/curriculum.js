@@ -58,7 +58,20 @@ function powerRuleDerivative(coef, exp) {
   return formatMonomial(coef * exp, exp - 1);
 }
 
+// e^x is its own derivative, so coefficient 1 (plain e^x) and any other
+// coefficient both just reproduce the same text on both sides — no power
+// rule involved. Coefficient capped at 2-4 (Week 3's own request to keep
+// numbers under 5, separate from pickCoefficient's wider range).
+function formatExponential(coef) {
+  const coefPart = coef === 1 ? "" : String(coef);
+  return `${coefPart}e^x`;
+}
+
 const CONTENT_CATEGORIES = {
+  exponential: () => {
+    const a = pickInt(1, 4);
+    return { func: formatExponential(a), deriv: formatExponential(a), variable: "x" };
+  },
   monomial: (allowBig) => {
     const n = pickExponent(allowBig);
     return { func: formatMonomial(1, n), deriv: powerRuleDerivative(1, n), variable: "x" };
@@ -97,14 +110,21 @@ const CONTENT_CATEGORIES = {
 // Weeks 1-2 are identical for both classes per the user (2026-08-17).
 // Math 204-1 should never use trig functions — keep that in mind when
 // adding future weeks for that class specifically.
+//
+// Week 3 (2026-08-31): introduces exponential functions (e^x and
+// coefficient*e^x only — no chain rule / e^(kx) forms, no general a^x —
+// per the user's explicit scoping) via the single `exponential` category,
+// coefficient capped at 2-4.
 const WEEKLY_CURRICULUM = {
   "Math 204-1": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }], allowBig: false },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }], allowBig: true },
+    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false },
   ],
   "Math 207": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }], allowBig: false },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }], allowBig: true },
+    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false },
   ],
   // Guest/tester content — a single always-available "week" mixing every
   // category at once, since there's no real weekly pacing to follow here.

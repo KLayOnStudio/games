@@ -733,7 +733,10 @@ function onR2SideClick(sideEl) {
   r2Sides.forEach((s) => (s.disabled = true));
 
   const { pair, functionSide } = r2State.current;
-  const isCorrect = sideEl.dataset.side === functionSide;
+  // A self-derivative pair (e.g. e^x) shows identical text on both sides —
+  // there's no real "wrong" side to tap, so either counts as correct.
+  const isSelfDerivative = pair.func === pair.deriv;
+  const isCorrect = isSelfDerivative || sideEl.dataset.side === functionSide;
 
   if (isCorrect) {
     sideEl.classList.add("correct");
