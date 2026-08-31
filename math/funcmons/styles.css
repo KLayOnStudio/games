@@ -268,6 +268,21 @@ label, .field-label {
   margin-left: auto;
 }
 
+/* Battle Mode swaps the solo Player/Moves/Time HUD for a Turn/P1/P2 one —
+   both sets live in the same header, toggled by this class rather than
+   two separate headers, since they share layout otherwise. */
+.game-header .battle-only {
+  display: none;
+}
+
+.game-header.battle-mode .solo-only {
+  display: none;
+}
+
+.game-header.battle-mode .battle-only {
+  display: flex;
+}
+
 .card-grid {
   flex: 1;
   display: grid;
@@ -442,7 +457,8 @@ label, .field-label {
 
 /* ---------- Win screen ---------- */
 
-#win-screen {
+#win-screen,
+#battle-result-screen {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

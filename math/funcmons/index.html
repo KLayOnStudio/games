@@ -28,12 +28,19 @@
       Playing as a guest / alumni (not currently enrolled)
     </label>
 
-    <div id="non-guest-fields">
-      <label for="school-year-select">School Year</label>
-      <select id="school-year-select" class="field-input"></select>
+    <label class="checkbox-row">
+      <input type="checkbox" id="battle-toggle" />
+      Battle Mode &mdash; 2 players, 1 device (in-class)
+    </label>
 
-      <label for="campus-select" class="field-label">Campus</label>
-      <select id="campus-select" class="field-input"></select>
+    <div id="non-guest-fields">
+      <div id="record-fields">
+        <label for="school-year-select">School Year</label>
+        <select id="school-year-select" class="field-input"></select>
+
+        <label for="campus-select" class="field-label">Campus</label>
+        <select id="campus-select" class="field-input"></select>
+      </div>
 
       <label for="class-select" class="field-label">Class</label>
       <select id="class-select" class="field-input"></select>
@@ -41,8 +48,18 @@
       <label for="week-select" class="field-label">Week</label>
       <select id="week-select" class="field-input"></select>
 
-      <label for="student-id" class="field-label">Student ID</label>
-      <input id="student-id" type="text" placeholder="Enter your ID" autocomplete="off" />
+      <div id="student-id-field">
+        <label for="student-id" class="field-label">Student ID</label>
+        <input id="student-id" type="text" placeholder="Enter your ID" autocomplete="off" />
+      </div>
+
+      <div id="battle-fields" class="hidden">
+        <label for="battle-p1-name" class="field-label">Player 1 Name</label>
+        <input id="battle-p1-name" type="text" placeholder="Player 1" autocomplete="off" />
+
+        <label for="battle-p2-name" class="field-label">Player 2 Name</label>
+        <input id="battle-p2-name" type="text" placeholder="Player 2" autocomplete="off" />
+      </div>
     </div>
 
     <p class="field-label">Number of pairs</p>
@@ -58,15 +75,28 @@
 
   <!-- GAME SCREEN -->
   <section id="game-screen" class="screen hidden">
-    <header class="game-header">
-      <div class="header-item"><span class="label">Player</span><span id="hud-player">&mdash;</span></div>
-      <div class="header-item"><span class="label">Moves</span><span id="hud-moves">0</span></div>
-      <div class="header-item"><span class="label">Time</span><span id="hud-time">0:00</span></div>
+    <header id="game-header" class="game-header">
+      <div class="header-item solo-only"><span class="label">Player</span><span id="hud-player">&mdash;</span></div>
+      <div class="header-item solo-only"><span class="label">Moves</span><span id="hud-moves">0</span></div>
+      <div class="header-item solo-only"><span class="label">Time</span><span id="hud-time">0:00</span></div>
+      <div class="header-item battle-only"><span class="label">Turn</span><span id="hud-turn">&mdash;</span></div>
+      <div class="header-item battle-only"><span class="label" id="hud-p1-label">P1</span><span id="hud-p1-matches">0</span></div>
+      <div class="header-item battle-only"><span class="label" id="hud-p2-label">P2</span><span id="hud-p2-matches">0</span></div>
       <button id="quit-btn" class="text-btn">Quit</button>
     </header>
     <div id="card-grid" class="card-grid"></div>
     <div id="rule-card" class="rule-card hidden"></div>
     <button id="item-card" class="item-card hidden" aria-label="Power-up"></button>
+  </section>
+
+  <!-- BATTLE RESULT SCREEN -->
+  <section id="battle-result-screen" class="screen hidden">
+    <h1 id="battle-result-title">Battle over!</h1>
+    <p id="battle-result-summary" class="subtitle"></p>
+    <div class="win-actions">
+      <button id="battle-again-btn" class="primary-btn">Battle Again</button>
+      <button id="battle-back-btn" class="text-btn">Back to Setup</button>
+    </div>
   </section>
 
   <!-- WIN SCREEN -->

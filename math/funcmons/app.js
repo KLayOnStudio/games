@@ -5,6 +5,7 @@ const setupScreen = document.getElementById("setup-screen");
 const gameScreen = document.getElementById("game-screen");
 const winScreen = document.getElementById("win-screen");
 const round2Screen = document.getElementById("round2-screen");
+const battleResultScreen = document.getElementById("battle-result-screen");
 
 const guestToggle = document.getElementById("guest-toggle");
 const nonGuestFields = document.getElementById("non-guest-fields");
@@ -16,6 +17,13 @@ const studentIdInput = document.getElementById("student-id");
 const pairCountOptions = document.getElementById("pair-count-options");
 const startBtn = document.getElementById("start-btn");
 const startHint = document.getElementById("start-hint");
+
+const battleToggle = document.getElementById("battle-toggle");
+const recordFields = document.getElementById("record-fields");
+const studentIdField = document.getElementById("student-id-field");
+const battleFields = document.getElementById("battle-fields");
+const battleP1NameInput = document.getElementById("battle-p1-name");
+const battleP2NameInput = document.getElementById("battle-p2-name");
 
 let selectedPairCount = null;
 
@@ -93,6 +101,18 @@ function applyGuestMode(isGuest) {
   }
 }
 
+// Battle Mode (2 players, 1 shared device) keeps Class/Week — still needed
+// to generate content — but drops School Year/Campus/Student ID entirely,
+// since nothing about a battle gets recorded to any leaderboard. Not
+// persisted across page loads (unlike the other setup fields) — a shared
+// classroom device shouldn't default back into Battle Mode for the next
+// solo student who picks it up.
+function applyBattleMode(isBattle) {
+  recordFields.classList.toggle("hidden", isBattle);
+  studentIdField.classList.toggle("hidden", isBattle);
+  battleFields.classList.toggle("hidden", !isBattle);
+}
+
 // Remember the last-used setup fields on this browser/device so returning
 // students don't have to re-enter everything. On a shared computer this
 // will also pre-fill the previous student's info; typing/reselecting
@@ -150,11 +170,29 @@ if (cachedSetup.pairCount) {
   }
 }
 applyGuestMode(guestToggle.checked);
+applyBattleMode(false); // never persisted, always starts off
 
+// Guest mode and Battle Mode don't compose (a "guest" doesn't mean anything
+// once there are two players sharing the device) — turning one on turns
+// the other off.
 guestToggle.addEventListener("change", () => {
+  if (guestToggle.checked && battleToggle.checked) {
+    battleToggle.checked = false;
+    applyBattleMode(false);
+  }
   applyGuestMode(guestToggle.checked);
   updateStartButton();
   saveSetupCache();
+});
+
+battleToggle.addEventListener("change", () => {
+  if (battleToggle.checked && guestToggle.checked) {
+    guestToggle.checked = false;
+    applyGuestMode(false);
+    saveSetupCache();
+  }
+  applyBattleMode(battleToggle.checked);
+  updateStartButton();
 });
 
 [schoolYearSelect, campusSelect].forEach((select) => {
@@ -173,12 +211,23 @@ classSelect.addEventListener("change", () => {
 weekSelect.addEventListener("change", updateStartButton);
 
 const cardGrid = document.getElementById("card-grid");
+const gameHeaderEl = document.getElementById("game-header");
 const hudPlayer = document.getElementById("hud-player");
 const hudMoves = document.getElementById("hud-moves");
 const hudTime = document.getElementById("hud-time");
+const hudTurn = document.getElementById("hud-turn");
+const hudP1Label = document.getElementById("hud-p1-label");
+const hudP1Matches = document.getElementById("hud-p1-matches");
+const hudP2Label = document.getElementById("hud-p2-label");
+const hudP2Matches = document.getElementById("hud-p2-matches");
 const quitBtn = document.getElementById("quit-btn");
 const itemCardEl = document.getElementById("item-card");
 const ruleCardEl = document.getElementById("rule-card");
+
+const battleResultTitle = document.getElementById("battle-result-title");
+const battleResultSummary = document.getElementById("battle-result-summary");
+const battleAgainBtn = document.getElementById("battle-again-btn");
+const battleBackBtn = document.getElementById("battle-back-btn");
 
 const winSummary = document.getElementById("win-summary");
 const leaderboardBody = document.getElementById("leaderboard-body");
@@ -206,7 +255,7 @@ let timerInterval = null;
 let r2TimerInterval = null;
 
 function showScreen(screen) {
-  [setupScreen, gameScreen, winScreen, round2Screen].forEach((s) => s.classList.add("hidden"));
+  [setupScreen, gameScreen, winScreen, round2Screen, battleResultScreen].forEach((s) => s.classList.add("hidden"));
   screen.classList.remove("hidden");
   // Refresh the hint so a stale message from a prior Start attempt (e.g. an
   // id-conflict note) doesn't linger once the student's back on this screen.
@@ -246,6 +295,11 @@ function updateStartButton() {
     return;
   }
 
+  if (battleToggle.checked) {
+    startHint.textContent = "Battle Mode — 2 players, 1 device. Not recorded to any leaderboard.";
+    return;
+  }
+
   // School Year/Campus/Student ID are only needed for the result to count
   // toward the student's record — the game is still playable without them.
   const missingForRecord = [];
@@ -263,8 +317,24 @@ function updateStartButton() {
 updateStartButton();
 
 startBtn.addEventListener("click", async () => {
-  const studentId = studentIdInput.value.trim();
   const className = guestToggle.checked ? GUEST_CLASS : classSelect.value;
+
+  // Battle Mode skips student-id/claim handling entirely — there's no
+  // single student to identify and nothing gets recorded.
+  if (battleToggle.checked) {
+    startBattle({
+      className,
+      weekNumber: Number(weekSelect.value),
+      pairCount: selectedPairCount,
+      players: [
+        battleP1NameInput.value.trim() || "Player 1",
+        battleP2NameInput.value.trim() || "Player 2",
+      ],
+    });
+    return;
+  }
+
+  const studentId = studentIdInput.value.trim();
 
   // Catch likely typos before they silently fragment a student's record: if
   // this device has started a game as a different id before, make sure the
@@ -335,6 +405,7 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
   const { deck, sessionPairs } = buildDeck(className, weekNumber, pairCount);
 
   state = {
+    mode: "solo",
     studentId,
     schoolYear,
     campus,
@@ -352,6 +423,7 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
     timerFrozenUntil: 0,
   };
 
+  gameHeaderEl.classList.remove("battle-mode");
   hudPlayer.textContent = studentId || "Guest";
   hudMoves.textContent = "0";
   hudTime.textContent = "0:00";
@@ -363,6 +435,76 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
   stopItemSpawns(); // clear anything left over from a previous game first
   scheduleNextItemSpawn();
 }
+
+// ---------- Battle Mode (2 players, 1 device) ----------
+// Reuses the same card-grid/flip/power-up machinery as solo Round 1 —
+// onCardClick and checkWin both branch on state.mode === "battle" rather
+// than duplicating the matching logic. No timer (nothing is scored) and no
+// leaderboard recording at all, per the user's explicit scope decision.
+
+function startBattle({ className, weekNumber, pairCount, players }) {
+  const { deck, sessionPairs } = buildDeck(className, weekNumber, pairCount);
+
+  state = {
+    mode: "battle",
+    className,
+    weekNumber,
+    pairCount,
+    deck,
+    sessionPairs,
+    flipped: [],
+    matchedPairIds: new Set(),
+    matchCount: 0,
+    moves: 0,
+    locked: false,
+    players: players.map((name) => ({ name, matches: 0 })),
+    currentPlayerIndex: 0,
+  };
+
+  gameHeaderEl.classList.add("battle-mode");
+  updateBattleHud();
+
+  renderGrid();
+  showScreen(gameScreen);
+  sizeCardGrid();
+  stopItemSpawns(); // clear anything left over from a previous game first
+  scheduleNextItemSpawn();
+}
+
+function updateBattleHud() {
+  hudP1Label.textContent = state.players[0].name;
+  hudP2Label.textContent = state.players[1].name;
+  hudP1Matches.textContent = String(state.players[0].matches);
+  hudP2Matches.textContent = String(state.players[1].matches);
+  hudTurn.textContent = state.players[state.currentPlayerIndex].name;
+}
+
+function finishBattle() {
+  const [p1, p2] = state.players;
+  if (p1.matches === p2.matches) {
+    battleResultTitle.textContent = "It's a tie!";
+    battleResultSummary.textContent = `${p1.name} and ${p2.name} both matched ${p1.matches} pairs.`;
+  } else {
+    const winner = p1.matches > p2.matches ? p1 : p2;
+    const loser = p1.matches > p2.matches ? p2 : p1;
+    battleResultTitle.textContent = `${winner.name} wins!`;
+    battleResultSummary.textContent = `${winner.name} matched ${winner.matches} pairs to ${loser.name}'s ${loser.matches}.`;
+  }
+  showScreen(battleResultScreen);
+}
+
+battleAgainBtn.addEventListener("click", () => {
+  startBattle({
+    className: state.className,
+    weekNumber: state.weekNumber,
+    pairCount: state.pairCount,
+    players: state.players.map((p) => p.name),
+  });
+});
+
+battleBackBtn.addEventListener("click", () => {
+  showScreen(setupScreen);
+});
 
 // ---------- Fit-to-screen card sizing ----------
 // Cards are sized in px (not left to CSS auto-fit) so the whole grid — up
@@ -452,7 +594,10 @@ function scheduleNextItemSpawn() {
 function spawnItem() {
   if (!state || gameScreen.classList.contains("hidden")) return;
 
-  const keys = Object.keys(ITEM_TYPES);
+  // "freeze" has nothing to pause in Battle Mode — there's no timer/score,
+  // so it's excluded from the pool there rather than being a no-op tap.
+  const keys =
+    state.mode === "battle" ? Object.keys(ITEM_TYPES).filter((k) => k !== "freeze") : Object.keys(ITEM_TYPES);
   activeItemKey = keys[Math.floor(Math.random() * keys.length)];
   itemCardEl.textContent = ITEM_TYPES[activeItemKey].icon;
   itemCardEl.setAttribute("aria-label", ITEM_TYPES[activeItemKey].label);
@@ -566,6 +711,11 @@ function onCardClick(cardIndex) {
         markMatched(b, state.matchCount);
         state.flipped = [];
         state.locked = false;
+        // A match keeps the same player's turn — classic memory-game rules.
+        if (state.mode === "battle") {
+          state.players[state.currentPlayerIndex].matches += 1;
+          updateBattleHud();
+        }
         checkWin();
       }, 400);
     } else {
@@ -578,6 +728,11 @@ function onCardClick(cardIndex) {
         unflipCard(b.cardIndex);
         state.flipped = [];
         state.locked = false;
+        // A miss passes the device — the other player's turn.
+        if (state.mode === "battle") {
+          state.currentPlayerIndex = 1 - state.currentPlayerIndex;
+          updateBattleHud();
+        }
       }, mismatchDelay);
     }
   }
@@ -615,8 +770,14 @@ function markMatched(card, matchNumber) {
 async function checkWin() {
   if (state.matchedPairIds.size < state.pairCount) return;
 
-  stopTimer();
   stopItemSpawns();
+
+  if (state.mode === "battle") {
+    finishBattle();
+    return;
+  }
+
+  stopTimer();
 
   const isIdentified = state.studentId && state.schoolYear && state.campus && state.className;
 
