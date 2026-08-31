@@ -318,11 +318,11 @@ class BootstrapPasswordIn(BaseModel):
     newPassword: str
 
 
-@app.post("/admin/bootstrap-password")
+@app.post("/dashboard/bootstrap-password")
 def bootstrap_admin_password(body: BootstrapPasswordIn):
     """One-time setup — only works while admin_auth is still empty. Once a
     password exists this always 409s, so there's no way to silently reset
-    it without already knowing the current one (see /admin/change-password
+    it without already knowing the current one (see /dashboard/change-password
     for that instead)."""
     if len(body.newPassword) < MIN_ADMIN_PASSWORD_LENGTH:
         raise HTTPException(400, f"Password must be at least {MIN_ADMIN_PASSWORD_LENGTH} characters.")
@@ -331,7 +331,7 @@ def bootstrap_admin_password(body: BootstrapPasswordIn):
     cursor = conn.cursor()
     if get_admin_auth_row(cursor):
         conn.close()
-        raise HTTPException(409, "Admin password already set — use /admin/change-password instead.")
+        raise HTTPException(409, "Admin password already set — use /dashboard/change-password instead.")
 
     password_hash, password_salt = hash_password(body.newPassword)
     cursor.execute(
@@ -348,7 +348,7 @@ class ChangePasswordIn(BaseModel):
     newPassword: str
 
 
-@app.post("/admin/change-password")
+@app.post("/dashboard/change-password")
 def change_admin_password(body: ChangePasswordIn):
     if len(body.newPassword) < MIN_ADMIN_PASSWORD_LENGTH:
         raise HTTPException(400, f"New password must be at least {MIN_ADMIN_PASSWORD_LENGTH} characters.")
@@ -383,7 +383,7 @@ def check_admin_password(provided: Optional[str]):
         raise HTTPException(401, "Incorrect admin password.")
 
 
-@app.get("/admin/activity")
+@app.get("/dashboard/activity")
 def get_admin_activity(x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password")):
     """Summary dashboard data — one row per (school year, campus, class),
     not per student and not per individual play. Deliberately no per-week

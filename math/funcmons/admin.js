@@ -1,5 +1,5 @@
 // Admin activity dashboard — talks to the same backend as the game, but
-// through password-gated endpoints (see backend/main.py's /admin/* routes).
+// through password-gated endpoints (see backend/main.py's /dashboard/* routes).
 // The password itself lives in the database as a salted hash; this page
 // never touches the database directly, only the API, same as every other
 // page in this app.
@@ -64,7 +64,7 @@ async function loadActivity(password) {
   adminLoginBtn.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/admin/activity`, {
+    const response = await fetch(`${API_BASE_URL}/dashboard/activity`, {
       headers: { "X-Admin-Password": password },
     });
 
@@ -133,7 +133,7 @@ adminChangeBtn.addEventListener("click", async () => {
   adminChangeBtn.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/admin/change-password`, {
+    const response = await fetch(`${API_BASE_URL}/dashboard/change-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ currentPassword: current, newPassword: next }),
