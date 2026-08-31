@@ -585,6 +585,17 @@ label, .field-label {
 #round2-screen {
   max-width: 520px;
   margin: 0 auto;
+  background-color: var(--bg);
+  transition: background-color 0.3s ease;
+}
+
+/* Same Battle Mode turn-tint treatment as Round 1's #game-screen. */
+#round2-screen.battle-turn-1 {
+  background-color: color-mix(in srgb, var(--player1-color) 12%, var(--bg));
+}
+
+#round2-screen.battle-turn-2 {
+  background-color: color-mix(in srgb, var(--player2-color) 12%, var(--bg));
 }
 
 #round2-screen .game-header {

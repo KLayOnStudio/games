@@ -228,6 +228,7 @@ const ruleCardEl = document.getElementById("rule-card");
 
 const battleResultTitle = document.getElementById("battle-result-title");
 const battleResultSummary = document.getElementById("battle-result-summary");
+const battleRound2Btn = document.getElementById("battle-round2-btn");
 const battleAgainBtn = document.getElementById("battle-again-btn");
 const battleBackBtn = document.getElementById("battle-back-btn");
 
@@ -239,9 +240,15 @@ const changeSettingsBtn = document.getElementById("change-settings-btn");
 
 const r2Play = document.getElementById("r2-play");
 const r2Complete = document.getElementById("r2-complete");
+const round2HeaderEl = document.getElementById("round2-header");
 const r2HudPlayer = document.getElementById("r2-hud-player");
 const r2HudSolved = document.getElementById("r2-hud-solved");
 const r2HudMistakes = document.getElementById("r2-hud-mistakes");
+const r2HudTurn = document.getElementById("r2-hud-turn");
+const r2HudP1Label = document.getElementById("r2-hud-p1-label");
+const r2HudP1Solved = document.getElementById("r2-hud-p1-solved");
+const r2HudP2Label = document.getElementById("r2-hud-p2-label");
+const r2HudP2Solved = document.getElementById("r2-hud-p2-solved");
 const r2HudTime = document.getElementById("r2-hud-time");
 const r2ProgressFill = document.getElementById("r2-progress-fill");
 const r2QuitBtn = document.getElementById("r2-quit-btn");
@@ -506,6 +513,22 @@ function finishBattle() {
     battleResultTitle.textContent = `${winner.name} wins!`;
     battleResultSummary.textContent = `${winner.name} matched ${winner.matches} pairs to ${loser.name}'s ${loser.matches}.`;
   }
+  battleRound2Btn.classList.remove("hidden");
+  showScreen(battleResultScreen);
+}
+
+function finishBattleRound2() {
+  const [p1, p2] = r2State.players;
+  if (p1.solved === p2.solved) {
+    battleResultTitle.textContent = "Round 2: it's a tie!";
+    battleResultSummary.textContent = `${p1.name} and ${p2.name} both solved ${p1.solved} pairs in ${formatTime(r2State.seconds)}.`;
+  } else {
+    const winner = p1.solved > p2.solved ? p1 : p2;
+    const loser = p1.solved > p2.solved ? p2 : p1;
+    battleResultTitle.textContent = `${winner.name} wins Round 2!`;
+    battleResultSummary.textContent = `${winner.name} solved ${winner.solved} pairs to ${loser.name}'s ${loser.solved}, in ${formatTime(r2State.seconds)}.`;
+  }
+  battleRound2Btn.classList.add("hidden");
   showScreen(battleResultScreen);
 }
 
@@ -909,6 +932,7 @@ function startRound2() {
   const pairs = usedPairIds.map((id) => state.sessionPairs.find((p) => p.id === id));
 
   r2State = {
+    mode: "solo",
     studentId: state.studentId,
     queue: shuffle(pairs),
     total: pairs.length,
@@ -919,6 +943,8 @@ function startRound2() {
     locked: false,
   };
 
+  round2HeaderEl.classList.remove("battle-mode");
+  round2Screen.classList.remove("battle-turn-1", "battle-turn-2");
   r2HudPlayer.textContent = state.studentId || "Guest";
   r2HudTime.textContent = "0:00";
   updateR2Hud();
@@ -929,6 +955,41 @@ function startRound2() {
   startR2Timer();
   renderNextR2Item();
 }
+
+// Battle Mode's Round 2 — reuses the same pairs as the Round 1 battle just
+// played (state.deck/state.sessionPairs, set by startBattle), same turn
+// rule as Round 1: a correct tap keeps your turn, a wrong one passes the
+// device. Most pairs solved when the queue clears wins. Still timed (the
+// user's explicit call, unlike Round 1 Battle which has no clock) — the
+// timer is purely informational here since nothing is scored/recorded.
+function startBattleRound2() {
+  const usedPairIds = [...new Set(state.deck.map((c) => c.pairId))];
+  const pairs = usedPairIds.map((id) => state.sessionPairs.find((p) => p.id === id));
+
+  r2State = {
+    mode: "battle",
+    queue: shuffle(pairs),
+    total: pairs.length,
+    mistakes: 0,
+    seconds: 0,
+    current: null,
+    locked: false,
+    players: state.players.map((p) => ({ name: p.name, color: p.color, solved: 0 })),
+    currentPlayerIndex: 0,
+  };
+
+  round2HeaderEl.classList.add("battle-mode");
+  r2HudTime.textContent = "0:00";
+  updateBattleR2Hud();
+  r2Complete.classList.add("hidden");
+  r2Play.classList.remove("hidden");
+
+  showScreen(round2Screen);
+  startR2Timer();
+  renderNextR2Item();
+}
+
+battleRound2Btn.addEventListener("click", startBattleRound2);
 
 function startR2Timer() {
   stopR2Timer();
@@ -949,9 +1010,31 @@ function updateR2Hud() {
   r2ProgressFill.style.width = `${(r2State.solved / r2State.total) * 100}%`;
 }
 
+function updateBattleR2Hud() {
+  r2HudP1Label.textContent = r2State.players[0].name;
+  r2HudP2Label.textContent = r2State.players[1].name;
+  r2HudP1Solved.textContent = String(r2State.players[0].solved);
+  r2HudP2Solved.textContent = String(r2State.players[1].solved);
+  r2HudTurn.textContent = r2State.players[r2State.currentPlayerIndex].name;
+
+  const totalSolved = r2State.players[0].solved + r2State.players[1].solved;
+  r2ProgressFill.style.width = `${(totalSolved / r2State.total) * 100}%`;
+
+  const isPlayer1Turn = r2State.currentPlayerIndex === 0;
+  round2Screen.classList.toggle("battle-turn-1", isPlayer1Turn);
+  round2Screen.classList.toggle("battle-turn-2", !isPlayer1Turn);
+  r2HudTurn.style.color = isPlayer1Turn ? "var(--player1-color)" : "var(--player2-color)";
+}
+
 async function renderNextR2Item() {
   if (r2State.queue.length === 0) {
     stopR2Timer();
+
+    if (r2State.mode === "battle") {
+      finishBattleRound2();
+      return;
+    }
+
     r2Play.classList.add("hidden");
     r2Complete.classList.remove("hidden");
 
@@ -1027,8 +1110,15 @@ function onR2SideClick(sideEl) {
       throwOnError: false,
     });
     r2Equals.classList.add("correct");
-    r2State.solved += 1;
-    updateR2Hud();
+    // Battle Mode: a correct tap keeps the same player's turn, same rule
+    // as Round 1's card matching.
+    if (r2State.mode === "battle") {
+      r2State.players[r2State.currentPlayerIndex].solved += 1;
+      updateBattleR2Hud();
+    } else {
+      r2State.solved += 1;
+      updateR2Hud();
+    }
     setTimeout(renderNextR2Item, 700);
   } else {
     sideEl.classList.add("incorrect");
@@ -1040,7 +1130,13 @@ function onR2SideClick(sideEl) {
     r2Equals.classList.add("incorrect");
     r2State.mistakes += 1;
     r2State.queue.push(pair);
-    updateR2Hud();
+    // Battle Mode: a wrong tap passes the device to the other player.
+    if (r2State.mode === "battle") {
+      r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
+      updateBattleR2Hud();
+    } else {
+      updateR2Hud();
+    }
     setTimeout(renderNextR2Item, 900);
   }
 }

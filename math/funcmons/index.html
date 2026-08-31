@@ -100,7 +100,8 @@
     <h1 id="battle-result-title">Battle over!</h1>
     <p id="battle-result-summary" class="subtitle"></p>
     <div class="win-actions">
-      <button id="battle-again-btn" class="primary-btn">Battle Again</button>
+      <button id="battle-round2-btn" class="primary-btn">Continue to Round 2</button>
+      <button id="battle-again-btn" class="text-btn">Battle Again</button>
       <button id="battle-back-btn" class="text-btn">Back to Setup</button>
     </div>
   </section>
@@ -131,10 +132,13 @@
 
   <!-- ROUND 2 SCREEN -->
   <section id="round2-screen" class="screen hidden">
-    <header class="game-header">
-      <div class="header-item"><span class="label">Player</span><span id="r2-hud-player">&mdash;</span></div>
-      <div class="header-item"><span class="label">Solved</span><span id="r2-hud-solved">0/0</span></div>
-      <div class="header-item"><span class="label">Mistakes</span><span id="r2-hud-mistakes">0</span></div>
+    <header id="round2-header" class="game-header">
+      <div class="header-item solo-only"><span class="label">Player</span><span id="r2-hud-player">&mdash;</span></div>
+      <div class="header-item solo-only"><span class="label">Solved</span><span id="r2-hud-solved">0/0</span></div>
+      <div class="header-item solo-only"><span class="label">Mistakes</span><span id="r2-hud-mistakes">0</span></div>
+      <div class="header-item battle-only"><span class="label">Turn</span><span id="r2-hud-turn">&mdash;</span></div>
+      <div class="header-item battle-only"><span class="label" id="r2-hud-p1-label">P1</span><span id="r2-hud-p1-solved">0</span></div>
+      <div class="header-item battle-only"><span class="label" id="r2-hud-p2-label">P2</span><span id="r2-hud-p2-solved">0</span></div>
       <div class="header-item"><span class="label">Time</span><span id="r2-hud-time">0:00</span></div>
       <button id="r2-quit-btn" class="text-btn">Quit</button>
     </header>
