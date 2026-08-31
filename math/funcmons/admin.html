@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>f(x) Monsters — Activity</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="app">
+  <section id="admin-screen" class="screen">
+    <h1>Activity Dashboard</h1>
+    <p class="subtitle">Session counts by school year / campus / class &mdash; not visible to students.</p>
+
+    <div id="admin-login">
+      <label for="admin-password" class="field-label">Admin Password</label>
+      <input id="admin-password" class="field-input" type="password" autocomplete="current-password" />
+      <p id="admin-hint" class="hint"></p>
+      <button id="admin-login-btn" class="primary-btn">View Activity</button>
+    </div>
+
+    <div id="admin-results" class="hidden">
+      <div id="admin-table-wrap">
+        <table id="admin-table">
+          <thead>
+            <tr>
+              <th>School Year</th>
+              <th>Campus</th>
+              <th>Class</th>
+              <th>Total Plays</th>
+              <th>Students</th>
+              <th>Round 1</th>
+              <th>Round 2</th>
+              <th>Last Played</th>
+            </tr>
+          </thead>
+          <tbody id="admin-table-body"></tbody>
+        </table>
+      </div>
+
+      <div class="admin-actions">
+        <button id="admin-refresh-btn" class="text-btn">Refresh</button>
+        <button id="admin-logout-btn" class="text-btn">Log Out</button>
+      </div>
+
+      <div class="change-password-form">
+        <p class="field-label">Change Password</p>
+        <input id="admin-current-password" class="field-input" type="password" placeholder="Current password" autocomplete="current-password" />
+        <input id="admin-new-password" class="field-input" type="password" placeholder="New password (6+ characters)" autocomplete="new-password" style="margin-top: 10px;" />
+        <p id="admin-change-hint" class="hint"></p>
+        <button id="admin-change-btn" class="text-btn">Update Password</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

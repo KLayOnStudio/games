@@ -64,5 +64,19 @@ def init_db():
         )
         """
     )
+    # Single-row table holding the admin dashboard's password as a salted
+    # hash — never plaintext. Starts empty; POST /admin/bootstrap-password
+    # sets the first row and refuses to run again once one exists, so
+    # there's no separate "setup secret" to manage.
+    cursor.execute(
+        """
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='admin_auth' AND xtype='U')
+        CREATE TABLE admin_auth (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            password_hash NVARCHAR(200) NOT NULL,
+            password_salt NVARCHAR(200) NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()

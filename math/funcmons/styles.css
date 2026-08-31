@@ -692,3 +692,62 @@ label, .field-label {
 .r2-side:disabled {
   cursor: default;
 }
+
+/* ---------- Admin activity dashboard ---------- */
+
+#admin-screen {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  max-width: 760px;
+  margin: 60px auto 0;
+}
+
+#admin-screen h1 {
+  text-align: center;
+}
+
+#admin-screen .subtitle {
+  text-align: center;
+}
+
+#admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+#admin-table th,
+#admin-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+#admin-table th {
+  color: var(--ink-soft);
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+#admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.change-password-form {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}

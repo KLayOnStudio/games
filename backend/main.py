@@ -27,10 +27,13 @@ this file itself is just a plain FastAPI app — nothing Azure-specific here
 except how the database connection is obtained (db.py).
 """
 
+import hashlib
+import hmac
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -280,3 +283,147 @@ def get_overall_leaderboard(pairs: int, schoolYear: str, campus: str, className:
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+# ---------- Admin activity dashboard ----------
+# The password lives in the database (admin_auth, one row), never in code
+# or an env var, hashed with a per-password random salt (PBKDF2-HMAC-
+# SHA256, 200k iterations) — never stored or compared as plaintext. The
+# frontend never touches the database directly (that would mean shipping
+# DB credentials to every visitor's browser); it only ever calls these
+# endpoints, same as everything else in this file.
+
+PBKDF2_ITERATIONS = 200_000
+MIN_ADMIN_PASSWORD_LENGTH = 6
+
+
+def hash_password(password: str, salt_hex: Optional[str] = None) -> tuple[str, str]:
+    salt = bytes.fromhex(salt_hex) if salt_hex else os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return digest.hex(), salt.hex()
+
+
+def verify_password(password: str, stored_hash_hex: str, stored_salt_hex: str) -> bool:
+    computed_hash_hex, _ = hash_password(password, stored_salt_hex)
+    return hmac.compare_digest(computed_hash_hex, stored_hash_hex)
+
+
+def get_admin_auth_row(cursor) -> Optional[dict]:
+    cursor.execute("SELECT TOP 1 password_hash, password_salt FROM admin_auth ORDER BY id DESC")
+    rows = rows_to_dicts(cursor)
+    return rows[0] if rows else None
+
+
+class BootstrapPasswordIn(BaseModel):
+    newPassword: str
+
+
+@app.post("/admin/bootstrap-password")
+def bootstrap_admin_password(body: BootstrapPasswordIn):
+    """One-time setup — only works while admin_auth is still empty. Once a
+    password exists this always 409s, so there's no way to silently reset
+    it without already knowing the current one (see /admin/change-password
+    for that instead)."""
+    if len(body.newPassword) < MIN_ADMIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Password must be at least {MIN_ADMIN_PASSWORD_LENGTH} characters.")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    if get_admin_auth_row(cursor):
+        conn.close()
+        raise HTTPException(409, "Admin password already set — use /admin/change-password instead.")
+
+    password_hash, password_salt = hash_password(body.newPassword)
+    cursor.execute(
+        "INSERT INTO admin_auth (password_hash, password_salt) VALUES (?, ?)",
+        (password_hash, password_salt),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class ChangePasswordIn(BaseModel):
+    currentPassword: str
+    newPassword: str
+
+
+@app.post("/admin/change-password")
+def change_admin_password(body: ChangePasswordIn):
+    if len(body.newPassword) < MIN_ADMIN_PASSWORD_LENGTH:
+        raise HTTPException(400, f"New password must be at least {MIN_ADMIN_PASSWORD_LENGTH} characters.")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    existing = get_admin_auth_row(cursor)
+    if not existing or not verify_password(body.currentPassword, existing["password_hash"], existing["password_salt"]):
+        conn.close()
+        raise HTTPException(401, "Current password is incorrect.")
+
+    password_hash, password_salt = hash_password(body.newPassword)
+    cursor.execute(
+        "UPDATE admin_auth SET password_hash = ?, password_salt = ?",
+        (password_hash, password_salt),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+def check_admin_password(provided: Optional[str]):
+    if not provided:
+        raise HTTPException(401, "Missing admin password.")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    existing = get_admin_auth_row(cursor)
+    conn.close()
+
+    if not existing or not verify_password(provided, existing["password_hash"], existing["password_salt"]):
+        raise HTTPException(401, "Incorrect admin password.")
+
+
+@app.get("/admin/activity")
+def get_admin_activity(x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password")):
+    """Summary dashboard data — one row per (school year, campus, class),
+    not per student and not per individual play. Deliberately no per-week
+    breakdown yet: the results table doesn't store which week a session was
+    played under, only when (played_at)."""
+    check_admin_password(x_admin_password)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            school_year,
+            campus,
+            class_name,
+            COUNT(*) AS total_plays,
+            COUNT(DISTINCT student_id) AS unique_students,
+            SUM(CASE WHEN round = 1 THEN 1 ELSE 0 END) AS round1_plays,
+            SUM(CASE WHEN round = 2 THEN 1 ELSE 0 END) AS round2_plays,
+            MIN(played_at) AS first_played_at,
+            MAX(played_at) AS last_played_at
+        FROM results
+        GROUP BY school_year, campus, class_name
+        ORDER BY school_year, campus, class_name
+        """
+    )
+    rows = rows_to_dicts(cursor)
+    conn.close()
+
+    return [
+        {
+            "schoolYear": r["school_year"],
+            "campus": r["campus"],
+            "className": r["class_name"],
+            "totalPlays": r["total_plays"],
+            "uniqueStudents": r["unique_students"],
+            "round1Plays": r["round1_plays"],
+            "round2Plays": r["round2_plays"],
+            "firstPlayedAt": r["first_played_at"],
+            "lastPlayedAt": r["last_played_at"],
+        }
+        for r in rows
+    ]
