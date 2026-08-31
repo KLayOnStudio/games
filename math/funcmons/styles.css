@@ -704,6 +704,28 @@ label, .field-label {
   cursor: default;
 }
 
+/* Battle Mode only — announces each turn's point change (+1/-1/timeout)
+   so it's impossible to miss, unlike the equals-sign color alone. */
+.r2-feedback {
+  min-height: 1.4rem;
+  margin-top: 12px;
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+}
+
+.r2-feedback.correct {
+  color: var(--good);
+}
+
+.r2-feedback.incorrect {
+  color: var(--bad);
+}
+
+.r2-feedback.timeout {
+  color: var(--ink-soft);
+}
+
 /* ---------- Admin activity dashboard ---------- */
 
 #admin-screen {

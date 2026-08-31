@@ -256,6 +256,7 @@ const r2InstructionsNotation = document.getElementById("r2-instructions-notation
 const r2Equals = document.getElementById("r2-equals");
 const r2Sides = document.querySelectorAll(".r2-side");
 const r2Summary = document.getElementById("r2-summary");
+const r2Feedback = document.getElementById("r2-feedback");
 const r2BackBtn = document.getElementById("r2-back-btn");
 
 let state = null; // set by startGame()
@@ -519,14 +520,14 @@ function finishBattle() {
 
 function finishBattleRound2() {
   const [p1, p2] = r2State.players;
-  if (p1.solved === p2.solved) {
+  if (p1.points === p2.points) {
     battleResultTitle.textContent = "Round 2: it's a tie!";
-    battleResultSummary.textContent = `${p1.name} and ${p2.name} both solved ${p1.solved} pairs in ${formatTime(r2State.seconds)}.`;
+    battleResultSummary.textContent = `${p1.name} and ${p2.name} both finished with ${p1.points} points in ${formatTime(r2State.seconds)}.`;
   } else {
-    const winner = p1.solved > p2.solved ? p1 : p2;
-    const loser = p1.solved > p2.solved ? p2 : p1;
+    const winner = p1.points > p2.points ? p1 : p2;
+    const loser = p1.points > p2.points ? p2 : p1;
     battleResultTitle.textContent = `${winner.name} wins Round 2!`;
-    battleResultSummary.textContent = `${winner.name} solved ${winner.solved} pairs to ${loser.name}'s ${loser.solved}, in ${formatTime(r2State.seconds)}.`;
+    battleResultSummary.textContent = `${winner.name} finished with ${winner.points} points to ${loser.name}'s ${loser.points}, in ${formatTime(r2State.seconds)}.`;
   }
   battleRound2Btn.classList.add("hidden");
   showScreen(battleResultScreen);
@@ -981,13 +982,14 @@ function startBattleRound2() {
     mode: "battle",
     queue: shuffle(pairs),
     total: pairs.length,
+    cleared: 0, // pairs answered correctly at least once — drives the progress bar, separate from points
     mistakes: 0,
     seconds: 0,
     turnNumber: 0,
     turnRemaining: 0,
     current: null,
     locked: false,
-    players: state.players.map((p) => ({ name: p.name, color: p.color, solved: 0 })),
+    players: state.players.map((p) => ({ name: p.name, color: p.color, points: 0 })),
     currentPlayerIndex: 0,
   };
 
@@ -1038,17 +1040,26 @@ function updateR2Hud() {
 function updateBattleR2Hud() {
   r2HudP1Label.textContent = r2State.players[0].name;
   r2HudP2Label.textContent = r2State.players[1].name;
-  r2HudP1Solved.textContent = String(r2State.players[0].solved);
-  r2HudP2Solved.textContent = String(r2State.players[1].solved);
+  r2HudP1Solved.textContent = String(r2State.players[0].points);
+  r2HudP2Solved.textContent = String(r2State.players[1].points);
   r2HudTurn.textContent = r2State.players[r2State.currentPlayerIndex].name;
 
-  const totalSolved = r2State.players[0].solved + r2State.players[1].solved;
-  r2ProgressFill.style.width = `${(totalSolved / r2State.total) * 100}%`;
+  r2ProgressFill.style.width = `${(r2State.cleared / r2State.total) * 100}%`;
 
   const isPlayer1Turn = r2State.currentPlayerIndex === 0;
   round2Screen.classList.toggle("battle-turn-1", isPlayer1Turn);
   round2Screen.classList.toggle("battle-turn-2", !isPlayer1Turn);
   r2HudTurn.style.color = isPlayer1Turn ? "var(--player1-color)" : "var(--player2-color)";
+}
+
+function showR2Feedback(text, kind) {
+  r2Feedback.textContent = text;
+  r2Feedback.className = `r2-feedback ${kind}`;
+}
+
+function clearR2Feedback() {
+  r2Feedback.textContent = "";
+  r2Feedback.className = "r2-feedback";
 }
 
 async function renderNextR2Item() {
@@ -1106,6 +1117,7 @@ async function renderNextR2Item() {
     r2State.turnNumber += 1;
     r2State.turnRemaining = getBattleTurnTimeLimit(r2State.turnNumber);
     r2HudTime.textContent = formatTime(r2State.turnRemaining);
+    clearR2Feedback();
   }
 
   r2InstructionsNotation.innerHTML = katex.renderToString(diffNotation(pair.variable), {
@@ -1147,9 +1159,13 @@ function onR2SideClick(sideEl) {
     r2Equals.classList.add("correct");
     // Battle Mode: unlike Round 1's card matching, Round 2 always
     // alternates turns every equation regardless of right/wrong — a
-    // correct tap still scores, it just doesn't keep the turn.
+    // correct tap still scores, it just doesn't keep the turn. Points:
+    // +1 correct, -1 wrong, +0 timeout (the user's explicit scoring).
     if (r2State.mode === "battle") {
-      r2State.players[r2State.currentPlayerIndex].solved += 1;
+      const answeringPlayer = r2State.players[r2State.currentPlayerIndex];
+      answeringPlayer.points += 1;
+      r2State.cleared += 1;
+      showR2Feedback(`${answeringPlayer.name}: +1`, "correct");
       r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
       updateBattleR2Hud();
     } else {
@@ -1168,6 +1184,9 @@ function onR2SideClick(sideEl) {
     r2State.mistakes += 1;
     r2State.queue.push(pair);
     if (r2State.mode === "battle") {
+      const answeringPlayer = r2State.players[r2State.currentPlayerIndex];
+      answeringPlayer.points -= 1;
+      showR2Feedback(`${answeringPlayer.name}: -1`, "incorrect");
       r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
       updateBattleR2Hud();
     } else {
@@ -1193,6 +1212,9 @@ function handleR2Timeout() {
   vibrate(200);
   r2State.mistakes += 1;
   r2State.queue.push(pair);
+
+  const answeringPlayer = r2State.players[r2State.currentPlayerIndex];
+  showR2Feedback(`${answeringPlayer.name}: Time's up! +0`, "timeout");
   r2State.currentPlayerIndex = 1 - r2State.currentPlayerIndex;
   updateBattleR2Hud();
   setTimeout(renderNextR2Item, 900);
