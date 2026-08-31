@@ -966,11 +966,11 @@ function startRound2() {
 // solved (see onR2SideClick/handleR2Timeout).
 //
 // Each player has their OWN time limit (not a shared/combined schedule):
-// starts at 10 seconds and drops by 1 every OTHER correct answer THAT
+// starts at 8 seconds and drops by 1 every OTHER correct answer THAT
 // player gets (wrong taps, timeouts, and every odd-numbered correct don't
 // shrink it), floored at 3 seconds. Tracked directly as player.timeLimit,
 // mutated in onR2SideClick's correct branch based on player.correctCount.
-const BATTLE_TURN_TIME_LIMIT_START = 10;
+const BATTLE_TURN_TIME_LIMIT_START = 8;
 const BATTLE_TURN_TIME_LIMIT_FLOOR = 3;
 
 function startBattleRound2() {
