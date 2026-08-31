@@ -28,16 +28,22 @@ function pickFrom(list) {
 
 // Exponents are mostly small (0-10). When a week allows it, occasionally
 // mixes in a "big but round" exponent instead, per the user's "throw in
-// some large numbers like 100" request.
-function pickExponent(allowBig) {
+// some large numbers like 100" request. `caps.maxExponent`, when set,
+// overrides ALL of that (no big jumps, hard ceiling) — used to cap what a
+// given SESSION can roll regardless of which week's block a category came
+// from, since weeks pool cumulatively (see generateOnePair).
+function pickExponent(allowBig, caps) {
+  if (caps && caps.maxExponent != null) return pickInt(0, caps.maxExponent);
   if (allowBig && Math.random() < 0.2) return pickFrom([20, 50, 100]);
   return pickInt(0, 10);
 }
 
 // Coefficients are mostly small ints, occasionally a round "big" number —
 // round coefficients keep coef*exponent (the derivative's coefficient)
-// easy to compute even when paired with a big exponent.
-function pickCoefficient() {
+// easy to compute even when paired with a big exponent. `caps.maxCoefficient`
+// overrides this the same way pickExponent's cap does.
+function pickCoefficient(caps) {
+  if (caps && caps.maxCoefficient != null) return pickInt(2, caps.maxCoefficient);
   if (Math.random() < 0.3) return pickFrom([10, 20, 50, 100]);
   return pickInt(2, 9);
 }
@@ -68,33 +74,34 @@ function formatExponential(coef) {
 }
 
 const CONTENT_CATEGORIES = {
-  exponential: () => {
-    const a = pickInt(1, 4);
+  exponential: (allowBig, caps) => {
+    const maxCoef = caps && caps.maxCoefficient != null ? Math.min(caps.maxCoefficient, 4) : 4;
+    const a = pickInt(1, maxCoef);
     return { func: formatExponential(a), deriv: formatExponential(a), variable: "x" };
   },
-  monomial: (allowBig) => {
-    const n = pickExponent(allowBig);
+  monomial: (allowBig, caps) => {
+    const n = pickExponent(allowBig, caps);
     return { func: formatMonomial(1, n), deriv: powerRuleDerivative(1, n), variable: "x" };
   },
-  sumOfMonomials: (allowBig) => {
-    const n = pickExponent(allowBig);
-    const m = pickExponent(allowBig);
+  sumOfMonomials: (allowBig, caps) => {
+    const n = pickExponent(allowBig, caps);
+    const m = pickExponent(allowBig, caps);
     return {
       func: `${formatMonomial(1, n)} + ${formatMonomial(1, m)}`,
       deriv: `${powerRuleDerivative(1, n)} + ${powerRuleDerivative(1, m)}`,
       variable: "x",
     };
   },
-  monomialWithCoefficient: (allowBig) => {
-    const a = pickCoefficient();
-    const n = pickExponent(allowBig);
+  monomialWithCoefficient: (allowBig, caps) => {
+    const a = pickCoefficient(caps);
+    const n = pickExponent(allowBig, caps);
     return { func: formatMonomial(a, n), deriv: powerRuleDerivative(a, n), variable: "x" };
   },
-  linearCombination: (allowBig) => {
-    const a = pickCoefficient();
-    const b = pickCoefficient();
-    const n = pickExponent(allowBig);
-    const m = pickExponent(allowBig);
+  linearCombination: (allowBig, caps) => {
+    const a = pickCoefficient(caps);
+    const b = pickCoefficient(caps);
+    const n = pickExponent(allowBig, caps);
+    const m = pickExponent(allowBig, caps);
     return {
       func: `${formatMonomial(a, n)} + ${formatMonomial(b, m)}`,
       deriv: `${powerRuleDerivative(a, n)} + ${powerRuleDerivative(b, m)}`,
@@ -114,17 +121,21 @@ const CONTENT_CATEGORIES = {
 // Week 3 (2026-08-31): introduces exponential functions (e^x and
 // coefficient*e^x only — no chain rule / e^(kx) forms, no general a^x —
 // per the user's explicit scoping) via the single `exponential` category,
-// coefficient capped at 2-4.
+// its own coefficient capped 1-4. Also carries a session-wide `caps`
+// (maxExponent: 10, maxCoefficient: 5) applied to EVERYTHING generated
+// while Week 3 is selected — including monomials/coefficients pooled in
+// from weeks 1-2's blocks, which otherwise allow occasional exponents/
+// coefficients up to 100. See generateOnePair's targetWeekCaps.
 const WEEKLY_CURRICULUM = {
   "Math 204-1": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }], allowBig: false },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }], allowBig: true },
-    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false },
+    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false, caps: { maxExponent: 10, maxCoefficient: 5 } },
   ],
   "Math 207": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }], allowBig: false },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }], allowBig: true },
-    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false },
+    { categories: [{ key: "exponential", weight: 1.0 }], allowBig: false, caps: { maxExponent: 10, maxCoefficient: 5 } },
   ],
   // Guest/tester content — a single always-available "week" mixing every
   // category at once, since there's no real weekly pacing to follow here.
@@ -168,9 +179,15 @@ function weightedPick(entries) {
 
 function generateOnePair(className, weekNumber) {
   const weeks = (WEEKLY_CURRICULUM[className] || []).slice(0, weekNumber);
+  // Caps come from the TARGET week (the one actually selected), not
+  // whichever week's block a category happens to be pulled from — so
+  // picking Week 3 caps everything in its cumulative pool (including
+  // monomials/coefficients pooled in from weeks 1-2), while playing Week 1
+  // or Week 2 on their own is unaffected.
+  const targetWeekCaps = weeks.length ? weeks[weeks.length - 1].caps : undefined;
   const pool = weeks.flatMap((week) => week.categories.map((cat) => ({ ...cat, allowBig: week.allowBig })));
   const chosen = weightedPick(pool);
-  return CONTENT_CATEGORIES[chosen.key](chosen.allowBig);
+  return CONTENT_CATEGORIES[chosen.key](chosen.allowBig, targetWeekCaps);
 }
 
 // Generates `pairCount` pairs with no duplicate expression text across
