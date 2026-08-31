@@ -427,3 +427,53 @@ def get_admin_activity(x_admin_password: Optional[str] = Header(None, alias="X-A
         }
         for r in rows
     ]
+
+
+@app.get("/dashboard/students")
+def get_admin_students(x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password")):
+    """Per-student breakdown — one row per (student, school year, campus,
+    class). bestOverallScore comes from `results.score` on round-2 rows,
+    which is already the combined round1+round2 score (see submit_result) —
+    the same raw number the student's own leaderboard entry would show,
+    just without the repetition-bonus discount that's only meaningful for
+    ranking, not for an admin activity view."""
+    check_admin_password(x_admin_password)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            student_id,
+            school_year,
+            campus,
+            class_name,
+            COUNT(*) AS total_plays,
+            SUM(CASE WHEN round = 1 THEN 1 ELSE 0 END) AS round1_plays,
+            SUM(CASE WHEN round = 2 THEN 1 ELSE 0 END) AS round2_plays,
+            MIN(CASE WHEN round = 1 THEN score END) AS best_round1_score,
+            MIN(CASE WHEN round = 2 THEN score END) AS best_overall_score,
+            MAX(played_at) AS last_played_at
+        FROM results
+        GROUP BY student_id, school_year, campus, class_name
+        ORDER BY school_year, campus, class_name, student_id
+        """
+    )
+    rows = rows_to_dicts(cursor)
+    conn.close()
+
+    return [
+        {
+            "studentId": r["student_id"],
+            "schoolYear": r["school_year"],
+            "campus": r["campus"],
+            "className": r["class_name"],
+            "totalPlays": r["total_plays"],
+            "round1Plays": r["round1_plays"],
+            "round2Plays": r["round2_plays"],
+            "bestRound1Score": r["best_round1_score"],
+            "bestOverallScore": r["best_overall_score"],
+            "lastPlayedAt": r["last_played_at"],
+        }
+        for r in rows
+    ]

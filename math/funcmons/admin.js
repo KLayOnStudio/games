@@ -18,10 +18,16 @@ const adminCurrentPasswordInput = document.getElementById("admin-current-passwor
 const adminNewPasswordInput = document.getElementById("admin-new-password");
 const adminChangeHint = document.getElementById("admin-change-hint");
 const adminChangeBtn = document.getElementById("admin-change-btn");
+const adminStudentFilterInput = document.getElementById("admin-student-filter");
+const adminStudentsTableBody = document.getElementById("admin-students-table-body");
 
 // Kept only in memory for this page load — never written to localStorage,
 // so it doesn't linger on a shared classroom/office computer.
 let currentPassword = "";
+
+// The unfiltered per-student rows from the last successful load, so the
+// filter box can re-render instantly without another API call.
+let allStudentRows = [];
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -59,26 +65,74 @@ function renderRows(rows) {
     .join("");
 }
 
+function scoreOrDash(score) {
+  return score == null ? "—" : score;
+}
+
+function renderStudentRows(rows) {
+  if (!rows.length) {
+    adminStudentsTableBody.innerHTML = `<tr><td colspan="10">No matching students.</td></tr>`;
+    return;
+  }
+
+  adminStudentsTableBody.innerHTML = rows
+    .map(
+      (r) => `
+      <tr>
+        <td>${escapeHtml(r.studentId)}</td>
+        <td>${escapeHtml(r.schoolYear)}</td>
+        <td>${escapeHtml(r.campus)}</td>
+        <td>${escapeHtml(r.className)}</td>
+        <td>${r.totalPlays}</td>
+        <td>${r.round1Plays}</td>
+        <td>${r.round2Plays}</td>
+        <td>${scoreOrDash(r.bestRound1Score)}</td>
+        <td>${scoreOrDash(r.bestOverallScore)}</td>
+        <td>${formatDate(r.lastPlayedAt)}</td>
+      </tr>`
+    )
+    .join("");
+}
+
+function applyStudentFilter() {
+  const query = adminStudentFilterInput.value.trim().toLowerCase();
+  if (!query) {
+    renderStudentRows(allStudentRows);
+    return;
+  }
+
+  const filtered = allStudentRows.filter((r) =>
+    [r.studentId, r.schoolYear, r.campus, r.className].some((field) =>
+      (field || "").toLowerCase().includes(query)
+    )
+  );
+  renderStudentRows(filtered);
+}
+
 async function loadActivity(password) {
   adminHint.textContent = "Loading…";
   adminLoginBtn.disabled = true;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/dashboard/activity`, {
-      headers: { "X-Admin-Password": password },
-    });
+    const [activityResponse, studentsResponse] = await Promise.all([
+      fetch(`${API_BASE_URL}/dashboard/activity`, { headers: { "X-Admin-Password": password } }),
+      fetch(`${API_BASE_URL}/dashboard/students`, { headers: { "X-Admin-Password": password } }),
+    ]);
 
-    if (response.status === 401) {
+    if (activityResponse.status === 401 || studentsResponse.status === 401) {
       adminHint.textContent = "Incorrect password.";
       return;
     }
-    if (!response.ok) {
+    if (!activityResponse.ok || !studentsResponse.ok) {
       adminHint.textContent = "Could not load activity — try again.";
       return;
     }
 
-    const rows = await response.json();
+    const rows = await activityResponse.json();
+    allStudentRows = await studentsResponse.json();
     renderRows(rows);
+    adminStudentFilterInput.value = "";
+    renderStudentRows(allStudentRows);
     currentPassword = password;
     adminLogin.classList.add("hidden");
     adminResults.classList.remove("hidden");
@@ -110,11 +164,14 @@ adminRefreshBtn.addEventListener("click", () => {
 
 adminLogoutBtn.addEventListener("click", () => {
   currentPassword = "";
+  allStudentRows = [];
   adminPasswordInput.value = "";
   adminResults.classList.add("hidden");
   adminLogin.classList.remove("hidden");
   adminHint.textContent = "";
 });
+
+adminStudentFilterInput.addEventListener("input", applyStudentFilter);
 
 adminChangeBtn.addEventListener("click", async () => {
   const current = adminCurrentPasswordInput.value;

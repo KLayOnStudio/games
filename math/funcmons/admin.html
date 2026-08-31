@@ -44,6 +44,28 @@
         </table>
       </div>
 
+      <p class="field-label" style="margin-top: 32px;">By Student</p>
+      <input id="admin-student-filter" class="field-input" type="text" placeholder="Filter by student ID, class, or campus…" autocomplete="off" />
+      <div id="admin-students-table-wrap">
+        <table id="admin-students-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>School Year</th>
+              <th>Campus</th>
+              <th>Class</th>
+              <th>Plays</th>
+              <th>R1</th>
+              <th>R2</th>
+              <th>Best R1</th>
+              <th>Best Overall</th>
+              <th>Last Played</th>
+            </tr>
+          </thead>
+          <tbody id="admin-students-table-body"></tbody>
+        </table>
+      </div>
+
       <div class="admin-actions">
         <button id="admin-refresh-btn" class="text-btn">Refresh</button>
         <button id="admin-logout-btn" class="text-btn">Log Out</button>

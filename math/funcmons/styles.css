@@ -712,14 +712,17 @@ label, .field-label {
   text-align: center;
 }
 
-#admin-table {
+#admin-table,
+#admin-students-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 16px;
 }
 
 #admin-table th,
-#admin-table td {
+#admin-table td,
+#admin-students-table th,
+#admin-students-table td {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
@@ -727,7 +730,8 @@ label, .field-label {
   white-space: nowrap;
 }
 
-#admin-table th {
+#admin-table th,
+#admin-students-table th {
   color: var(--ink-soft);
   font-family: var(--font-pixel);
   font-size: 0.5rem;
@@ -735,7 +739,8 @@ label, .field-label {
   letter-spacing: 0.03em;
 }
 
-#admin-table-wrap {
+#admin-table-wrap,
+#admin-students-table-wrap {
   overflow-x: auto;
 }
 
