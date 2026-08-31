@@ -177,6 +177,8 @@ const hudPlayer = document.getElementById("hud-player");
 const hudMoves = document.getElementById("hud-moves");
 const hudTime = document.getElementById("hud-time");
 const quitBtn = document.getElementById("quit-btn");
+const itemCardEl = document.getElementById("item-card");
+const ruleCardEl = document.getElementById("rule-card");
 
 const winSummary = document.getElementById("win-summary");
 const leaderboardBody = document.getElementById("leaderboard-body");
@@ -305,6 +307,7 @@ changeSettingsBtn.addEventListener("click", () => {
 
 quitBtn.addEventListener("click", () => {
   stopTimer();
+  stopItemSpawns();
   showScreen(setupScreen);
 });
 
@@ -346,6 +349,7 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
     moves: 0,
     seconds: 0,
     locked: false,
+    timerFrozenUntil: 0,
   };
 
   hudPlayer.textContent = studentId || "Guest";
@@ -356,6 +360,8 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
   showScreen(gameScreen);
   sizeCardGrid();
   startTimer();
+  stopItemSpawns(); // clear anything left over from a previous game first
+  scheduleNextItemSpawn();
 }
 
 // ---------- Fit-to-screen card sizing ----------
@@ -392,6 +398,8 @@ window.addEventListener("orientationchange", sizeCardGrid);
 function startTimer() {
   stopTimer();
   timerInterval = setInterval(() => {
+    // The "freeze" power-up pauses the clock without pausing the game.
+    if (state.timerFrozenUntil && Date.now() < state.timerFrozenUntil) return;
     state.seconds += 1;
     hudTime.textContent = formatTime(state.seconds);
   }, 1000);
@@ -406,6 +414,99 @@ function formatTime(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// ---------- Round 1 power-up items ----------
+// Floating cards that spawn at random moments during Round 1 (never during
+// Round 2 — its pacing/scoring is different, per the user's scope
+// decision) and, when tapped, apply a small temporary boost:
+//   freeze — pauses the elapsed-time clock for a few seconds
+//   rule   — shows the general differentiation rule as a reference card
+//   delay  — the next mismatched pair stays face-up longer before hiding
+// Battle Mode reuses this same spawn/activate system for its own turns.
+
+const ITEM_TYPES = {
+  freeze: { icon: "❄️", label: "Timer freeze", freezeSeconds: 5 },
+  rule: { icon: "📖", label: "Show the rule" },
+  delay: { icon: "⏳", label: "Extra look" },
+};
+
+const ITEM_MIN_SPAWN_MS = 8000;
+const ITEM_MAX_SPAWN_MS = 16000;
+const ITEM_VISIBLE_MS = 6000;
+const RULE_CARD_VISIBLE_MS = 4000;
+const EXTRA_LOOK_MS = 3000;
+
+let itemSpawnTimer = null;
+let itemHideTimer = null;
+let ruleCardHideTimer = null;
+let activeItemKey = null;
+let extraLookActive = false; // one-shot: applies to the next mismatch only
+
+function scheduleNextItemSpawn() {
+  clearTimeout(itemSpawnTimer);
+  const delay = ITEM_MIN_SPAWN_MS + Math.random() * (ITEM_MAX_SPAWN_MS - ITEM_MIN_SPAWN_MS);
+  itemSpawnTimer = setTimeout(spawnItem, delay);
+}
+
+function spawnItem() {
+  if (!state || gameScreen.classList.contains("hidden")) return;
+
+  const keys = Object.keys(ITEM_TYPES);
+  activeItemKey = keys[Math.floor(Math.random() * keys.length)];
+  itemCardEl.textContent = ITEM_TYPES[activeItemKey].icon;
+  itemCardEl.setAttribute("aria-label", ITEM_TYPES[activeItemKey].label);
+  itemCardEl.classList.remove("hidden");
+
+  clearTimeout(itemHideTimer);
+  itemHideTimer = setTimeout(hideItem, ITEM_VISIBLE_MS);
+}
+
+function hideItem() {
+  clearTimeout(itemHideTimer);
+  itemCardEl.classList.add("hidden");
+  activeItemKey = null;
+  scheduleNextItemSpawn();
+}
+
+// Called whenever Round 1 (or a Battle Mode turn) ends, so a floating item
+// never lingers into a screen it doesn't belong on — fixed positioning
+// means it'd otherwise stay visible over the win screen, setup, etc.
+function stopItemSpawns() {
+  clearTimeout(itemSpawnTimer);
+  clearTimeout(itemHideTimer);
+  clearTimeout(ruleCardHideTimer);
+  itemCardEl.classList.add("hidden");
+  ruleCardEl.classList.add("hidden");
+  activeItemKey = null;
+  extraLookActive = false;
+}
+
+itemCardEl.addEventListener("click", () => {
+  if (!activeItemKey) return;
+  activateItem(activeItemKey);
+  hideItem();
+});
+
+function activateItem(key) {
+  if (key === "freeze") {
+    state.timerFrozenUntil = Date.now() + ITEM_TYPES.freeze.freezeSeconds * 1000;
+  } else if (key === "rule") {
+    showRuleCard();
+  } else if (key === "delay") {
+    extraLookActive = true;
+  }
+}
+
+function showRuleCard() {
+  ruleCardEl.innerHTML =
+    "Power rule: " +
+    katex.renderToString("\\frac{d}{dx}\\left[x^n\\right] = nx^{n-1}", { throwOnError: false }) +
+    " &nbsp;&nbsp; " +
+    katex.renderToString("\\frac{d}{dx}\\left[e^x\\right] = e^x", { throwOnError: false });
+  ruleCardEl.classList.remove("hidden");
+  clearTimeout(ruleCardHideTimer);
+  ruleCardHideTimer = setTimeout(() => ruleCardEl.classList.add("hidden"), RULE_CARD_VISIBLE_MS);
 }
 
 // ---------- Rendering ----------
@@ -468,12 +569,16 @@ function onCardClick(cardIndex) {
         checkWin();
       }, 400);
     } else {
+      // The "delay" power-up extends this one mismatch's face-up time,
+      // then reverts to normal for every mismatch after it.
+      const mismatchDelay = extraLookActive ? EXTRA_LOOK_MS : 900;
+      extraLookActive = false;
       setTimeout(() => {
         unflipCard(a.cardIndex);
         unflipCard(b.cardIndex);
         state.flipped = [];
         state.locked = false;
-      }, 900);
+      }, mismatchDelay);
     }
   }
 }
@@ -511,6 +616,7 @@ async function checkWin() {
   if (state.matchedPairIds.size < state.pairCount) return;
 
   stopTimer();
+  stopItemSpawns();
 
   const isIdentified = state.studentId && state.schoolYear && state.campus && state.className;
 

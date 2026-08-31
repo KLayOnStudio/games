@@ -278,6 +278,64 @@ label, .field-label {
   min-height: 0;
 }
 
+/* ---------- Round 1 power-up items ---------- */
+/* Floating cards that spawn at random moments during Round 1 (fixed
+   position so they float above whatever's in the grid, not tied to a
+   specific card) — tap to activate, or they disappear on their own. */
+
+.item-card {
+  position: fixed;
+  right: 20px;
+  bottom: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  font-size: 1.6rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(28, 35, 51, 0.2);
+  z-index: 20;
+  animation: item-float 2.2s ease-in-out infinite;
+}
+
+.item-card.hidden {
+  display: none;
+}
+
+@keyframes item-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.rule-card {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 1.1rem;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(28, 35, 51, 0.2);
+  z-index: 20;
+}
+
+.rule-card.hidden {
+  display: none;
+}
+
 .card {
   aspect-ratio: 3 / 4;
   perspective: 800px;
