@@ -470,6 +470,7 @@ function startBattle({ className, weekNumber, pairCount, players }) {
     locked: false,
     players: players.map(({ name, color }) => ({ name, color, matches: 0 })),
     currentPlayerIndex: 0,
+    round1Winner: null, // set by finishBattle() once Round 1 ends — read by finishBattleRound2()
   };
 
   // Colors are per-battle, applied as custom-property overrides on the
@@ -506,11 +507,13 @@ function updateBattleHud() {
 function finishBattle() {
   const [p1, p2] = state.players;
   if (p1.matches === p2.matches) {
+    state.round1Winner = null;
     battleResultTitle.textContent = "It's a tie!";
     battleResultSummary.textContent = `${p1.name} and ${p2.name} both matched ${p1.matches} pairs.`;
   } else {
     const winner = p1.matches > p2.matches ? p1 : p2;
     const loser = p1.matches > p2.matches ? p2 : p1;
+    state.round1Winner = winner.name;
     battleResultTitle.textContent = `${winner.name} wins!`;
     battleResultSummary.textContent = `${winner.name} matched ${winner.matches} pairs to ${loser.name}'s ${loser.matches}.`;
   }
@@ -518,17 +521,33 @@ function finishBattle() {
   showScreen(battleResultScreen);
 }
 
+// Shows the FINAL result once both rounds are done — who won which round,
+// plus an overall verdict. Round 3 (a tiebreaker for a 1-1 split) is a
+// planned future addition, not built yet — a split result says so instead
+// of declaring a winner.
 function finishBattleRound2() {
   const [p1, p2] = r2State.players;
+  const round1WinnerName = state.round1Winner; // set by finishBattle(); null if Round 1 tied
+
+  let round2WinnerName = null;
+  let round2Text;
   if (p1.points === p2.points) {
-    battleResultTitle.textContent = "Round 2: it's a tie!";
-    battleResultSummary.textContent = `${p1.name} and ${p2.name} both finished with ${p1.points} points in ${formatTime(r2State.seconds)}.`;
+    round2Text = `Round 2: tied at ${p1.points} points each.`;
   } else {
     const winner = p1.points > p2.points ? p1 : p2;
     const loser = p1.points > p2.points ? p2 : p1;
-    battleResultTitle.textContent = `${winner.name} wins Round 2!`;
-    battleResultSummary.textContent = `${winner.name} finished with ${winner.points} points to ${loser.name}'s ${loser.points}, in ${formatTime(r2State.seconds)}.`;
+    round2WinnerName = winner.name;
+    round2Text = `Round 2: ${winner.name} won, ${winner.points} points to ${loser.name}'s ${loser.points}.`;
   }
+
+  const round1Text = round1WinnerName ? `Round 1: ${round1WinnerName} won.` : "Round 1: tied.";
+  const overallWinner = round1WinnerName && round1WinnerName === round2WinnerName ? round1WinnerName : null;
+
+  battleResultTitle.textContent = overallWinner ? `${overallWinner} wins the battle!` : "Battle tied!";
+  battleResultSummary.textContent = overallWinner
+    ? `${round1Text} ${round2Text}`
+    : `${round1Text} ${round2Text} A Round 3 tiebreaker is coming soon.`;
+
   battleRound2Btn.classList.add("hidden");
   showScreen(battleResultScreen);
 }
