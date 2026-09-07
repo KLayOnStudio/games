@@ -223,8 +223,9 @@ const hudP1Matches = document.getElementById("hud-p1-matches");
 const hudP2Label = document.getElementById("hud-p2-label");
 const hudP2Matches = document.getElementById("hud-p2-matches");
 const quitBtn = document.getElementById("quit-btn");
-const itemCardEl = document.getElementById("item-card");
-const ruleCardEl = document.getElementById("rule-card");
+const hintRevealEl = document.getElementById("hint-reveal");
+const hintKindEl = document.getElementById("hint-kind");
+const hintContentEl = document.getElementById("hint-content");
 
 const battleResultTitle = document.getElementById("battle-result-title");
 const battleResultSummary = document.getElementById("battle-result-summary");
@@ -387,7 +388,7 @@ changeSettingsBtn.addEventListener("click", () => {
 
 quitBtn.addEventListener("click", () => {
   stopTimer();
-  stopItemSpawns();
+  stopHintSystem();
   showScreen(setupScreen);
 });
 
@@ -443,8 +444,8 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
   showScreen(gameScreen);
   sizeCardGrid();
   startTimer();
-  stopItemSpawns(); // clear anything left over from a previous game first
-  scheduleNextItemSpawn();
+  stopHintSystem(); // clear anything left over from a previous game first
+  startHintSystem();
 }
 
 // ---------- Battle Mode (2 players, 1 device) ----------
@@ -487,8 +488,8 @@ function startBattle({ className, weekNumber, pairCount, players }) {
   renderGrid();
   showScreen(gameScreen);
   sizeCardGrid();
-  stopItemSpawns(); // clear anything left over from a previous game first
-  scheduleNextItemSpawn();
+  stopHintSystem(); // clear anything left over from a previous game first
+  startHintSystem();
 }
 
 function updateBattleHud() {
@@ -599,8 +600,12 @@ window.addEventListener("orientationchange", sizeCardGrid);
 function startTimer() {
   stopTimer();
   timerInterval = setInterval(() => {
-    // The "freeze" power-up pauses the clock without pausing the game.
-    if (state.timerFrozenUntil && Date.now() < state.timerFrozenUntil) return;
+    // The "freeze" hint pauses the clock without pausing the game — the
+    // frozen class gives it a visible highlight (bigger, gold, glowing)
+    // instead of the clock just silently not moving.
+    const frozen = state.timerFrozenUntil && Date.now() < state.timerFrozenUntil;
+    hudTime.classList.toggle("frozen", Boolean(frozen));
+    if (frozen) return;
     state.seconds += 1;
     hudTime.textContent = formatTime(state.seconds);
   }, 1000);
@@ -617,100 +622,188 @@ function formatTime(totalSeconds) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-// ---------- Round 1 power-up items ----------
-// Floating cards that spawn at random moments during Round 1 (never during
-// Round 2 — its pacing/scoring is different, per the user's scope
-// decision) and, when tapped, apply a small temporary boost:
-//   freeze — pauses the elapsed-time clock for a few seconds
-//   rule   — shows the general differentiation rule as a reference card
-//   delay  — the next mismatched pair stays face-up longer before hiding
-// Battle Mode reuses this same spawn/activate system for its own turns.
+// ---------- Round 1 hint card ----------
+// The hint IS a card — same shape as every real card in the grid, gold
+// instead of blue, "!" instead of "?" — riding on top of one real card's
+// back and hopping to a neighbor every ~1.6s. Always present and hopping
+// from the moment Round 1 starts (no random spawn delay — the old design
+// had one and it made the hint too easy to never notice at all). Tap it
+// correctly and it flies out to #hint-reveal ("the side of the board")
+// with a spin, showing what it was — one of three, picked at random each
+// time, never player-chosen:
+//   rule   — the power/sum/product rule, shown as text
+//   freeze — pauses the elapsed-time clock, highlighted directly on the
+//            HUD's Time stat rather than only on the reveal card
+//   xray   — a short window where tapping ANY card ghosts its content
+//            through the back at half opacity — no flip, no move spent,
+//            nothing auto-matched, purely a memorization aid
+// Tap the cell the hint just left and you flip a real card instead —
+// that's the risk. Battle Mode reuses this same system for its turns,
+// minus "freeze" (nothing to pause without a solo clock).
 
-const ITEM_TYPES = {
-  freeze: { icon: "❄️", label: "Timer freeze", freezeSeconds: 5 },
-  rule: { icon: "📖", label: "Show the rule" },
-  delay: { icon: "⏳", label: "Extra look" },
+const HINT_HOP_MS = 1600;
+const HINT_FREEZE_SECONDS = 5;
+const HINT_XRAY_WINDOW_MS = 3000;
+const HINT_REVEAL_MS = {
+  rule: 4500,
+  freeze: HINT_FREEZE_SECONDS * 1000,
+  xray: HINT_XRAY_WINDOW_MS,
 };
+const HINT_FLY_MS = 550;
 
-const ITEM_MIN_SPAWN_MS = 8000;
-const ITEM_MAX_SPAWN_MS = 16000;
-const ITEM_VISIBLE_MS = 6000;
-const RULE_CARD_VISIBLE_MS = 4000;
-const EXTRA_LOOK_MS = 3000;
+const RULES = [
+  { name: "POWER RULE", latex: "\\frac{d}{dx}\\left[x^n\\right] = nx^{n-1}" },
+  { name: "SUM RULE", latex: "\\frac{d}{dx}\\left[f+g\\right] = f'+g'" },
+  { name: "PRODUCT RULE", latex: "\\frac{d}{dx}\\left[f \\cdot g\\right] = f'g+fg'" },
+];
 
-let itemSpawnTimer = null;
-let itemHideTimer = null;
-let ruleCardHideTimer = null;
-let activeItemKey = null;
-let extraLookActive = false; // one-shot: applies to the next mismatch only
+let hintHopTimer = null;
+let hintRevealTimer = null;
+let hintCardIndex = -1;
+let hintActive = false;
+let xrayWindowOpen = false;
+let currentHintType = null;
 
-function scheduleNextItemSpawn() {
-  clearTimeout(itemSpawnTimer);
-  const delay = ITEM_MIN_SPAWN_MS + Math.random() * (ITEM_MAX_SPAWN_MS - ITEM_MIN_SPAWN_MS);
-  itemSpawnTimer = setTimeout(spawnItem, delay);
+// Which cards a hint may currently sit on / hop to — excludes matched
+// pairs (nothing left to guard there) and whatever's mid-flip.
+function eligibleHintIndices() {
+  if (!state) return [];
+  return state.deck
+    .map((card, i) => i)
+    .filter((i) => !isMatched(state.deck[i]) && !state.flipped.some((c) => c.cardIndex === i));
 }
 
-function spawnItem() {
-  if (!state || gameScreen.classList.contains("hidden")) return;
-
-  // "freeze" has nothing to pause in Battle Mode — there's no timer/score,
-  // so it's excluded from the pool there rather than being a no-op tap.
-  const keys =
-    state.mode === "battle" ? Object.keys(ITEM_TYPES).filter((k) => k !== "freeze") : Object.keys(ITEM_TYPES);
-  activeItemKey = keys[Math.floor(Math.random() * keys.length)];
-  itemCardEl.textContent = ITEM_TYPES[activeItemKey].icon;
-  itemCardEl.setAttribute("aria-label", ITEM_TYPES[activeItemKey].label);
-  itemCardEl.classList.remove("hidden");
-
-  clearTimeout(itemHideTimer);
-  itemHideTimer = setTimeout(hideItem, ITEM_VISIBLE_MS);
+function hintNeighbors(index) {
+  const cols = 4;
+  const total = state.deck.length;
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  const rows = Math.ceil(total / cols);
+  const out = [];
+  if (col > 0) out.push(index - 1);
+  if (col < cols - 1 && index + 1 < total) out.push(index + 1);
+  if (row > 0) out.push(index - cols);
+  if (row < rows - 1 && index + cols < total) out.push(index + cols);
+  return out.filter((i) => !isMatched(state.deck[i]) && !state.flipped.some((c) => c.cardIndex === i));
 }
 
-function hideItem() {
-  clearTimeout(itemHideTimer);
-  itemCardEl.classList.add("hidden");
-  activeItemKey = null;
-  scheduleNextItemSpawn();
+function randomHintType() {
+  const pool = state.mode === "battle" ? ["rule", "xray"] : ["rule", "freeze", "xray"];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// Called whenever Round 1 (or a Battle Mode turn) ends, so a floating item
-// never lingers into a screen it doesn't belong on — fixed positioning
-// means it'd otherwise stay visible over the win screen, setup, etc.
-function stopItemSpawns() {
-  clearTimeout(itemSpawnTimer);
-  clearTimeout(itemHideTimer);
-  clearTimeout(ruleCardHideTimer);
-  itemCardEl.classList.add("hidden");
-  ruleCardEl.classList.add("hidden");
-  activeItemKey = null;
-  extraLookActive = false;
+function paintHintOverlay() {
+  cardGrid.querySelectorAll(".card").forEach((el) => {
+    el.classList.remove("is-hint");
+    const qmark = el.querySelector(".qmark");
+    const symbol = el.querySelector(".hint-symbol");
+    if (qmark) qmark.hidden = false;
+    if (symbol) symbol.hidden = true;
+  });
+  if (!hintActive) return;
+  const el = cardElByIndex(hintCardIndex);
+  if (!el) return;
+  el.classList.add("is-hint");
+  const qmark = el.querySelector(".qmark");
+  const symbol = el.querySelector(".hint-symbol");
+  if (qmark) qmark.hidden = true;
+  if (symbol) symbol.hidden = false;
 }
 
-itemCardEl.addEventListener("click", () => {
-  if (!activeItemKey) return;
-  activateItem(activeItemKey);
-  hideItem();
-});
+function scheduleHintHop() {
+  clearTimeout(hintHopTimer);
+  hintHopTimer = setTimeout(() => {
+    if (hintActive) {
+      const options = hintNeighbors(hintCardIndex);
+      const pool = options.length ? options : eligibleHintIndices().filter((i) => i !== hintCardIndex);
+      if (pool.length) {
+        hintCardIndex = pool[Math.floor(Math.random() * pool.length)];
+        paintHintOverlay();
+      }
+    }
+    scheduleHintHop();
+  }, HINT_HOP_MS);
+}
 
-function activateItem(key) {
-  if (key === "freeze") {
-    state.timerFrozenUntil = Date.now() + ITEM_TYPES.freeze.freezeSeconds * 1000;
-  } else if (key === "rule") {
-    showRuleCard();
-  } else if (key === "delay") {
-    extraLookActive = true;
+// Called once per Round 1 (solo or Battle) game start — the hint is
+// visible and hopping immediately, no spawn-delay lottery.
+function startHintSystem() {
+  const pool = eligibleHintIndices();
+  if (!pool.length) return;
+  hintCardIndex = pool[Math.floor(Math.random() * pool.length)];
+  currentHintType = randomHintType();
+  hintActive = true;
+  paintHintOverlay();
+  scheduleHintHop();
+}
+
+// Called whenever Round 1 (or a Battle Mode turn) ends, so nothing lingers
+// into a screen it doesn't belong on.
+function stopHintSystem() {
+  clearTimeout(hintHopTimer);
+  clearTimeout(hintRevealTimer);
+  hintActive = false;
+  xrayWindowOpen = false;
+  hintCardIndex = -1;
+  paintHintOverlay();
+  hideHintReveal();
+  cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.remove("xray-peeked"));
+  if (hudTime) hudTime.classList.remove("frozen");
+}
+
+function flyHintRevealTo(kindLabel, contentHtml) {
+  // "hidden" (display:none) has to come off BEFORE the reflow trick below —
+  // a display:none element has no box to reflow, so restarting the
+  // animation on a second activation wouldn't reliably work otherwise.
+  hintRevealEl.classList.remove("hidden", "flying", "showing", "content-shown");
+  void hintRevealEl.offsetWidth; // restart the CSS animation
+  hintRevealEl.classList.add("flying", "showing");
+
+  setTimeout(() => {
+    hintKindEl.textContent = kindLabel;
+    hintContentEl.innerHTML = contentHtml;
+    hintRevealEl.classList.add("content-shown");
+  }, HINT_FLY_MS);
+}
+
+function hideHintReveal() {
+  hintRevealEl.classList.remove("showing", "flying", "content-shown");
+  hintRevealEl.classList.add("hidden");
+}
+
+function handleXrayPeek(cardIndex) {
+  const el = cardElByIndex(cardIndex);
+  if (!el || el.classList.contains("flipped") || el.classList.contains("matched")) return;
+  el.classList.add("xray-peeked");
+}
+
+// Called from onCardClick when the tap lands on the hint's current card.
+function activateHint() {
+  hintActive = false;
+  paintHintOverlay();
+
+  const type = currentHintType;
+
+  if (type === "rule") {
+    const rule = RULES[Math.floor(Math.random() * RULES.length)];
+    flyHintRevealTo(rule.name, katex.renderToString(rule.latex, { throwOnError: false }));
+  } else if (type === "freeze") {
+    state.timerFrozenUntil = Date.now() + HINT_FREEZE_SECONDS * 1000;
+    flyHintRevealTo("TIMER FREEZE", `&#10052;&#65039; ${HINT_FREEZE_SECONDS} seconds`);
+  } else if (type === "xray") {
+    xrayWindowOpen = true;
+    flyHintRevealTo("X-RAY VISION", "&#128065;&#65039; peek any card");
   }
-}
 
-function showRuleCard() {
-  ruleCardEl.innerHTML =
-    "Power rule: " +
-    katex.renderToString("\\frac{d}{dx}\\left[x^n\\right] = nx^{n-1}", { throwOnError: false }) +
-    " &nbsp;&nbsp; " +
-    katex.renderToString("\\frac{d}{dx}\\left[e^x\\right] = e^x", { throwOnError: false });
-  ruleCardEl.classList.remove("hidden");
-  clearTimeout(ruleCardHideTimer);
-  ruleCardHideTimer = setTimeout(() => ruleCardEl.classList.add("hidden"), RULE_CARD_VISIBLE_MS);
+  clearTimeout(hintRevealTimer);
+  hintRevealTimer = setTimeout(() => {
+    if (type === "xray") {
+      xrayWindowOpen = false;
+      cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.remove("xray-peeked"));
+    }
+    hideHintReveal();
+    startHintSystem();
+  }, HINT_REVEAL_MS[type]);
 }
 
 // ---------- Rendering ----------
@@ -724,14 +817,18 @@ function renderGrid() {
 
     el.innerHTML = `
       <div class="card-inner">
-        <div class="card-face card-back">?</div>
+        <div class="card-face card-back">
+          <span class="qmark">?</span>
+          <span class="hint-symbol" hidden>!</span>
+          <span class="xray-overlay"></span>
+        </div>
         <div class="card-face card-front"></div>
       </div>
     `;
 
-    el.querySelector(".card-front").innerHTML = katex.renderToString(card.latex, {
-      throwOnError: false,
-    });
+    const rendered = katex.renderToString(card.latex, { throwOnError: false });
+    el.querySelector(".card-front").innerHTML = rendered;
+    el.querySelector(".xray-overlay").innerHTML = rendered;
 
     el.addEventListener("click", () => onCardClick(card.cardIndex));
     cardGrid.appendChild(el);
@@ -746,6 +843,20 @@ function cardElByIndex(index) {
 
 function onCardClick(cardIndex) {
   if (state.locked) return;
+
+  // X-ray vision: while the window's open, every tap is a peek — no real
+  // flip happens, no move is spent, regardless of what's under the card.
+  if (xrayWindowOpen) {
+    handleXrayPeek(cardIndex);
+    return;
+  }
+
+  // The hint card intercepts a tap unconditionally — even if this card
+  // would otherwise be a legal move, tapping it uses the hint instead.
+  if (hintActive && cardIndex === hintCardIndex) {
+    activateHint();
+    return;
+  }
 
   const card = state.deck[cardIndex];
   if (state.matchedPairIds.has(`${card.pairId}-${card.type}-open`)) return;
@@ -778,10 +889,6 @@ function onCardClick(cardIndex) {
         checkWin();
       }, 400);
     } else {
-      // The "delay" power-up extends this one mismatch's face-up time,
-      // then reverts to normal for every mismatch after it.
-      const mismatchDelay = extraLookActive ? EXTRA_LOOK_MS : 900;
-      extraLookActive = false;
       setTimeout(() => {
         unflipCard(a.cardIndex);
         unflipCard(b.cardIndex);
@@ -792,7 +899,7 @@ function onCardClick(cardIndex) {
           state.currentPlayerIndex = 1 - state.currentPlayerIndex;
           updateBattleHud();
         }
-      }, mismatchDelay);
+      }, 900);
     }
   }
 }
@@ -829,7 +936,7 @@ function markMatched(card, matchNumber) {
 async function checkWin() {
   if (state.matchedPairIds.size < state.pairCount) return;
 
-  stopItemSpawns();
+  stopHintSystem();
 
   if (state.mode === "battle") {
     finishBattle();

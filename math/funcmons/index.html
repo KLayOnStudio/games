@@ -91,8 +91,15 @@
       <button id="quit-btn" class="text-btn">Quit</button>
     </header>
     <div id="card-grid" class="card-grid"></div>
-    <div id="rule-card" class="rule-card hidden"></div>
-    <button id="item-card" class="item-card hidden" aria-label="Power-up"></button>
+    <div id="hint-reveal" class="hint-reveal hidden">
+      <div class="hint-reveal-inner">
+        <div class="hint-face hint-back"><span class="hint-symbol">!</span></div>
+        <div class="hint-face hint-front">
+          <span class="hint-kind" id="hint-kind"></span>
+          <span class="hint-content" id="hint-content"></span>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- BATTLE RESULT SCREEN -->
