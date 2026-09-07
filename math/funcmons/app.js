@@ -593,11 +593,20 @@ function sizeCardGrid() {
   cardGrid.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
   cardGrid.style.gridTemplateRows = `repeat(${rows}, ${cardHeight}px)`;
 
-  // The hint's reveal card should look like the same card it just was —
-  // matched to the grid's own computed size, not a fixed size that'd
-  // make it visibly shrink or grow the moment it flies out.
-  hintRevealEl.style.width = `${cardWidth}px`;
-  hintRevealEl.style.height = `${cardHeight}px`;
+  // The hint's reveal card should look like the same card it just was.
+  // Measuring an ACTUAL rendered .card (rather than reusing the formula
+  // values above) guarantees a pixel-perfect match regardless of any
+  // subtle difference between the intended size and what the grid layout
+  // actually renders.
+  const sampleCard = cardGrid.querySelector(".card");
+  if (sampleCard) {
+    const rect = sampleCard.getBoundingClientRect();
+    hintRevealEl.style.width = `${rect.width}px`;
+    hintRevealEl.style.height = `${rect.height}px`;
+  } else {
+    hintRevealEl.style.width = `${cardWidth}px`;
+    hintRevealEl.style.height = `${cardHeight}px`;
+  }
 }
 
 window.addEventListener("resize", sizeCardGrid);
@@ -642,12 +651,14 @@ function formatTime(totalSeconds) {
 // minus "freeMove" (moves aren't tracked/scored in Battle Mode at all).
 
 const HINT_HOP_MS = 1600;
-const HINT_XRAY_WINDOW_MS = 1500;
+const HINT_XRAY_REVEAL_MS = 2000; // fully visible
+const HINT_XRAY_FADE_MS = 2000; // then fades out over this long
+const HINT_XRAY_TOTAL_MS = HINT_XRAY_REVEAL_MS + HINT_XRAY_FADE_MS;
 const HINT_FREE_MOVE_REVEAL_MS = 3000;
 const HINT_REVEAL_MS = {
   rule: 4500,
   freeMove: HINT_FREE_MOVE_REVEAL_MS,
-  xray: HINT_XRAY_WINDOW_MS,
+  xray: HINT_XRAY_TOTAL_MS,
 };
 const HINT_FLY_MS = 550;
 
@@ -749,7 +760,9 @@ function stopHintSystem() {
   hintCardIndex = -1;
   paintHintOverlay();
   hideHintReveal();
-  cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.remove("xray-peeked"));
+  cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => {
+    el.classList.remove("xray-peeked", "xray-fading");
+  });
 }
 
 function flyHintRevealTo(kindLabel, contentHtml) {
@@ -775,7 +788,9 @@ function hideHintReveal() {
 // X-ray vision is fully automatic — no tapping required (that's what was
 // confusing before: a tap during the window looked and behaved just like
 // a normal flip). Every unmatched, not-currently-flipped card ghosts its
-// content at once for HINT_XRAY_WINDOW_MS, then they all hide together.
+// content at once, stays fully visible for HINT_XRAY_REVEAL_MS, then
+// fades out over HINT_XRAY_FADE_MS (see the xray-fading class, added by
+// activateHint partway through).
 function showAllXrayOverlays() {
   cardGrid.querySelectorAll(".card").forEach((el) => {
     if (!el.classList.contains("flipped") && !el.classList.contains("matched")) {
@@ -801,13 +816,21 @@ function activateHint() {
     xrayWindowOpen = true;
     showAllXrayOverlays();
     flyHintRevealTo("X-RAY VISION", "&#128065;&#65039; look!");
+    // Stays fully visible, then starts a slow fade — xrayWindowOpen stays
+    // true for the whole sequence (blocking normal taps), not just the
+    // fully-visible phase, so there's no ambiguity while it's fading.
+    setTimeout(() => {
+      cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.add("xray-fading"));
+    }, HINT_XRAY_REVEAL_MS);
   }
 
   clearTimeout(hintRevealTimer);
   hintRevealTimer = setTimeout(() => {
     if (type === "xray") {
       xrayWindowOpen = false;
-      cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.remove("xray-peeked"));
+      cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => {
+        el.classList.remove("xray-peeked", "xray-fading");
+      });
     }
     hideHintReveal();
     startHintSystem();

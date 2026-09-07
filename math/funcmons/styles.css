@@ -393,6 +393,17 @@ label, .field-label {
   opacity: 0.5;
 }
 
+/* Added alongside xray-peeked (not instead of it) partway through the
+   window — same specificity as the rule above, so declaration order is
+   what makes this one win once both classes are present, dropping
+   opacity back to 0 over a much slower transition than the initial
+   reveal. The 2s here is independent of app.js's HINT_XRAY_FADE_MS —
+   keep them equal if either changes, nothing enforces it automatically. */
+.card.xray-fading .xray-overlay {
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+
 /* Fixed-position card the hint flies out to on activation — "the side of
    the board" regardless of viewport width, so it doesn't need dedicated
    grid real estate. Explicit width/height (not aspect-ratio) — a card
