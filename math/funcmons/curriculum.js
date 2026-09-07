@@ -31,6 +31,12 @@ const MAX_EXPONENT = 6;
 const MIN_COEFFICIENT = 2;
 const MAX_COEFFICIENT = 5;
 
+// Product rule pairs (Week 4) use their own, smaller exponent range —
+// computing a product-rule derivative by hand is already more work than
+// plain power rule, so the numbers stay simpler while that's being learned.
+const PRODUCT_MIN_EXPONENT = 1;
+const PRODUCT_MAX_EXPONENT = 3;
+
 function pickExponent() {
   return pickInt(0, MAX_EXPONENT);
 }
@@ -63,6 +69,24 @@ function powerRuleDerivative(coef, exp) {
 function formatExponential(coef) {
   const coefPart = coef === 1 ? "" : String(coef);
   return `${coefPart}e^x`;
+}
+
+// Renders coef*x^exp*e^x (a single term of a product-rule pair) — exp === 0
+// collapses to just coef*e^x, same convention as formatMonomial.
+function formatMonomialTimesExp(coef, exp) {
+  if (exp === 0) return formatExponential(coef);
+  const varPart = exp === 1 ? "x" : `x^{${exp}}`;
+  const coefPart = coef === 1 ? "" : String(coef);
+  return `${coefPart}${varPart}e^x`;
+}
+
+// Product rule: d/dx[coef*x^exp*e^x] = coef*exp*x^(exp-1)*e^x + coef*x^exp*e^x
+// — written out as an expanded sum of two terms (not factored), matching
+// the game's existing convention of never factoring a derivative.
+function productRuleDerivative(coef, exp) {
+  const firstTerm = formatMonomialTimesExp(coef * exp, exp - 1);
+  const secondTerm = formatMonomialTimesExp(coef, exp);
+  return `${firstTerm} + ${secondTerm}`;
 }
 
 const CONTENT_CATEGORIES = {
@@ -99,6 +123,15 @@ const CONTENT_CATEGORIES = {
       variable: "x",
     };
   },
+  productMonomialExp: () => {
+    const n = pickInt(PRODUCT_MIN_EXPONENT, PRODUCT_MAX_EXPONENT);
+    return { func: formatMonomialTimesExp(1, n), deriv: productRuleDerivative(1, n), variable: "x" };
+  },
+  productMonomialExpWithCoefficient: () => {
+    const a = pickCoefficient();
+    const n = pickInt(PRODUCT_MIN_EXPONENT, PRODUCT_MAX_EXPONENT);
+    return { func: formatMonomialTimesExp(a, n), deriv: productRuleDerivative(a, n), variable: "x" };
+  },
 };
 
 // Cumulative weekly curriculum per class. `categories` weights should sum
@@ -111,16 +144,24 @@ const CONTENT_CATEGORIES = {
 // Week 3 (2026-08-31): introduces exponential functions (e^x and
 // coefficient*e^x only — no chain rule / e^(kx) forms, no general a^x —
 // per the user's explicit scoping) via the single `exponential` category.
+//
+// Week 4 (2026-09-07): introduces the product rule via simple
+// monomial*e^x pairs (`productMonomialExp`/`productMonomialExpWithCoefficient`)
+// — exponent kept to PRODUCT_MIN_EXPONENT..PRODUCT_MAX_EXPONENT (1-3, smaller
+// than the game-wide 0-6) since a product-rule derivative is already more
+// work to compute by hand.
 const WEEKLY_CURRICULUM = {
   "Math 204-1": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }] },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }] },
     { categories: [{ key: "exponential", weight: 1.0 }] },
+    { categories: [{ key: "productMonomialExp", weight: 0.8 }, { key: "productMonomialExpWithCoefficient", weight: 0.2 }] },
   ],
   "Math 207": [
     { categories: [{ key: "monomial", weight: 0.8 }, { key: "sumOfMonomials", weight: 0.2 }] },
     { categories: [{ key: "monomialWithCoefficient", weight: 0.8 }, { key: "linearCombination", weight: 0.2 }] },
     { categories: [{ key: "exponential", weight: 1.0 }] },
+    { categories: [{ key: "productMonomialExp", weight: 0.8 }, { key: "productMonomialExpWithCoefficient", weight: 0.2 }] },
   ],
   // Guest/tester content — a single always-available "week" mixing every
   // category at once, since there's no real weekly pacing to follow here.
