@@ -431,7 +431,7 @@ function startGame({ studentId, schoolYear, campus, className, weekNumber, pairC
     moves: 0,
     seconds: 0,
     locked: false,
-    timerFrozenUntil: 0,
+    freeMoveAvailable: false, // set true by the "free move" hint — the next attempt won't count toward moves
   };
 
   gameHeaderEl.classList.remove("battle-mode");
@@ -592,6 +592,12 @@ function sizeCardGrid() {
 
   cardGrid.style.gridTemplateColumns = `repeat(${cols}, ${cardWidth}px)`;
   cardGrid.style.gridTemplateRows = `repeat(${rows}, ${cardHeight}px)`;
+
+  // The hint's reveal card should look like the same card it just was —
+  // matched to the grid's own computed size, not a fixed size that'd
+  // make it visibly shrink or grow the moment it flies out.
+  hintRevealEl.style.width = `${cardWidth}px`;
+  hintRevealEl.style.height = `${cardHeight}px`;
 }
 
 window.addEventListener("resize", sizeCardGrid);
@@ -600,12 +606,6 @@ window.addEventListener("orientationchange", sizeCardGrid);
 function startTimer() {
   stopTimer();
   timerInterval = setInterval(() => {
-    // The "freeze" hint pauses the clock without pausing the game — the
-    // frozen class gives it a visible highlight (bigger, gold, glowing)
-    // instead of the clock just silently not moving.
-    const frozen = state.timerFrozenUntil && Date.now() < state.timerFrozenUntil;
-    hudTime.classList.toggle("frozen", Boolean(frozen));
-    if (frozen) return;
     state.seconds += 1;
     hudTime.textContent = formatTime(state.seconds);
   }, 1000);
@@ -631,23 +631,22 @@ function formatTime(totalSeconds) {
 // correctly and it flies out to #hint-reveal ("the side of the board")
 // with a spin, showing what it was — one of three, picked at random each
 // time, never player-chosen:
-//   rule   — the power/sum/product rule, shown as text
-//   freeze — pauses the elapsed-time clock, highlighted directly on the
-//            HUD's Time stat rather than only on the reveal card
-//   xray   — every card briefly ghosts its content through the back at
-//            half opacity, all at once, automatically (no tapping — that
-//            was confusing, indistinguishable from a real flip) — no
-//            flip, no move spent, purely a memorization aid
+//   rule     — the power/sum/product rule, shown as text
+//   freeMove — the next attempt (2-card flip) doesn't count toward moves
+//   xray     — every card briefly ghosts its content through the back at
+//              half opacity, all at once, automatically (no tapping —
+//              that was confusing, indistinguishable from a real flip)
+//              — no flip, no move spent, purely a memorization aid
 // Tap the cell the hint just left and you flip a real card instead —
 // that's the risk. Battle Mode reuses this same system for its turns,
-// minus "freeze" (nothing to pause without a solo clock).
+// minus "freeMove" (moves aren't tracked/scored in Battle Mode at all).
 
 const HINT_HOP_MS = 1600;
-const HINT_FREEZE_SECONDS = 5;
 const HINT_XRAY_WINDOW_MS = 1500;
+const HINT_FREE_MOVE_REVEAL_MS = 3000;
 const HINT_REVEAL_MS = {
   rule: 4500,
-  freeze: HINT_FREEZE_SECONDS * 1000,
+  freeMove: HINT_FREE_MOVE_REVEAL_MS,
   xray: HINT_XRAY_WINDOW_MS,
 };
 const HINT_FLY_MS = 550;
@@ -689,7 +688,9 @@ function hintNeighbors(index) {
 }
 
 function randomHintType() {
-  const pool = state.mode === "battle" ? ["rule", "xray"] : ["rule", "freeze", "xray"];
+  // "freeMove" only means something where moves are tracked/scored —
+  // Battle Mode has neither, so it's excluded there just like freeze was.
+  const pool = state.mode === "battle" ? ["rule", "xray"] : ["rule", "freeMove", "xray"];
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -749,7 +750,6 @@ function stopHintSystem() {
   paintHintOverlay();
   hideHintReveal();
   cardGrid.querySelectorAll(".card.xray-peeked").forEach((el) => el.classList.remove("xray-peeked"));
-  if (hudTime) hudTime.classList.remove("frozen");
 }
 
 function flyHintRevealTo(kindLabel, contentHtml) {
@@ -794,9 +794,9 @@ function activateHint() {
   if (type === "rule") {
     const rule = RULES[Math.floor(Math.random() * RULES.length)];
     flyHintRevealTo(rule.name, katex.renderToString(rule.latex, { throwOnError: false }));
-  } else if (type === "freeze") {
-    state.timerFrozenUntil = Date.now() + HINT_FREEZE_SECONDS * 1000;
-    flyHintRevealTo("TIMER FREEZE", `&#10052;&#65039; ${HINT_FREEZE_SECONDS} seconds`);
+  } else if (type === "freeMove") {
+    state.freeMoveAvailable = true;
+    flyHintRevealTo("FREE MOVE", "&#127919; next flip won't count!");
   } else if (type === "xray") {
     xrayWindowOpen = true;
     showAllXrayOverlays();
@@ -873,8 +873,14 @@ function onCardClick(cardIndex) {
   state.flipped.push(card);
 
   if (state.flipped.length === 2) {
-    state.moves += 1;
-    hudMoves.textContent = String(state.moves);
+    // The "free move" hint makes this one attempt not count — consumed
+    // here regardless of whether it turns out to be a match or a miss.
+    if (state.freeMoveAvailable) {
+      state.freeMoveAvailable = false;
+    } else {
+      state.moves += 1;
+      hudMoves.textContent = String(state.moves);
+    }
     state.locked = true;
 
     const [a, b] = state.flipped;

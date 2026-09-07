@@ -397,7 +397,10 @@ label, .field-label {
    the board" regardless of viewport width, so it doesn't need dedicated
    grid real estate. Explicit width/height (not aspect-ratio) — a card
    sized with aspect-ratio inside a flex/fixed-position context didn't
-   reliably keep its portrait shape in testing. */
+   reliably keep its portrait shape in testing. width/height below are
+   just a fallback before the first layout pass — sizeCardGrid() (app.js)
+   always overrides them inline to match the real grid cards' own
+   computed size, so the hint never visibly shrinks/grows when it flies. */
 #hint-reveal {
   position: fixed;
   top: 50%;
@@ -492,11 +495,6 @@ label, .field-label {
   font-size: 1rem;
   line-height: 1.3;
   color: var(--ink);
-}
-
-#hud-time.frozen {
-  color: var(--gold-deep);
-  text-shadow: 0 0 8px var(--gold-soft);
 }
 
 .card {
