@@ -634,16 +634,17 @@ function formatTime(totalSeconds) {
 //   rule   — the power/sum/product rule, shown as text
 //   freeze — pauses the elapsed-time clock, highlighted directly on the
 //            HUD's Time stat rather than only on the reveal card
-//   xray   — a short window where tapping ANY card ghosts its content
-//            through the back at half opacity — no flip, no move spent,
-//            nothing auto-matched, purely a memorization aid
+//   xray   — every card briefly ghosts its content through the back at
+//            half opacity, all at once, automatically (no tapping — that
+//            was confusing, indistinguishable from a real flip) — no
+//            flip, no move spent, purely a memorization aid
 // Tap the cell the hint just left and you flip a real card instead —
 // that's the risk. Battle Mode reuses this same system for its turns,
 // minus "freeze" (nothing to pause without a solo clock).
 
 const HINT_HOP_MS = 1600;
 const HINT_FREEZE_SECONDS = 5;
-const HINT_XRAY_WINDOW_MS = 3000;
+const HINT_XRAY_WINDOW_MS = 1500;
 const HINT_REVEAL_MS = {
   rule: 4500,
   freeze: HINT_FREEZE_SECONDS * 1000,
@@ -771,10 +772,16 @@ function hideHintReveal() {
   hintRevealEl.classList.add("hidden");
 }
 
-function handleXrayPeek(cardIndex) {
-  const el = cardElByIndex(cardIndex);
-  if (!el || el.classList.contains("flipped") || el.classList.contains("matched")) return;
-  el.classList.add("xray-peeked");
+// X-ray vision is fully automatic — no tapping required (that's what was
+// confusing before: a tap during the window looked and behaved just like
+// a normal flip). Every unmatched, not-currently-flipped card ghosts its
+// content at once for HINT_XRAY_WINDOW_MS, then they all hide together.
+function showAllXrayOverlays() {
+  cardGrid.querySelectorAll(".card").forEach((el) => {
+    if (!el.classList.contains("flipped") && !el.classList.contains("matched")) {
+      el.classList.add("xray-peeked");
+    }
+  });
 }
 
 // Called from onCardClick when the tap lands on the hint's current card.
@@ -792,7 +799,8 @@ function activateHint() {
     flyHintRevealTo("TIMER FREEZE", `&#10052;&#65039; ${HINT_FREEZE_SECONDS} seconds`);
   } else if (type === "xray") {
     xrayWindowOpen = true;
-    flyHintRevealTo("X-RAY VISION", "&#128065;&#65039; peek any card");
+    showAllXrayOverlays();
+    flyHintRevealTo("X-RAY VISION", "&#128065;&#65039; look!");
   }
 
   clearTimeout(hintRevealTimer);
@@ -844,12 +852,10 @@ function cardElByIndex(index) {
 function onCardClick(cardIndex) {
   if (state.locked) return;
 
-  // X-ray vision: while the window's open, every tap is a peek — no real
-  // flip happens, no move is spent, regardless of what's under the card.
-  if (xrayWindowOpen) {
-    handleXrayPeek(cardIndex);
-    return;
-  }
+  // X-ray vision is automatic (showAllXrayOverlays) — taps do nothing
+  // while the brief window is open, so there's no ambiguity with a real
+  // flip during that moment.
+  if (xrayWindowOpen) return;
 
   // The hint card intercepts a tap unconditionally — even if this card
   // would otherwise be a legal move, tapping it uses the hint instead.
